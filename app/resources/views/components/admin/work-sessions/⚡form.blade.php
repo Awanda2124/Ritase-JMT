@@ -18,6 +18,10 @@ new #[Layout('layouts.app')] class extends Component
 
     public string $close_time = '18:00';
 
+    public string $checkin_closes_at = '';
+
+    public string $report_closes_at = '';
+
     public string $quota = '50';
 
     public function mount(?WorkSession $workSession = null): void
@@ -33,7 +37,17 @@ new #[Layout('layouts.app')] class extends Component
         $this->route = $workSession->route;
         $this->open_time = $workSession->opens_at->format('H:i');
         $this->close_time = $workSession->closes_at->format('H:i');
+        $this->checkin_closes_at = $workSession->checkin_closes_at?->format('Y-m-d\TH:i') ?? '';
+        $this->report_closes_at = $workSession->report_closes_at?->format('Y-m-d\TH:i') ?? '';
         $this->quota = (string) $workSession->quota;
+    }
+
+    // Batas check-in dan lapor berisi tanggal penuh, jadi dikosongkan saat
+    // tanggal sesi diubah agar default dihitung ulang dari tanggal baru.
+    public function updatedDate(): void
+    {
+        $this->checkin_closes_at = '';
+        $this->report_closes_at = '';
     }
 
     public function save(WorkSessionService $sessions): void
@@ -68,7 +82,7 @@ new #[Layout('layouts.app')] class extends Component
     <form wire:submit="save" class="mt-6 max-w-lg space-y-4 rounded-lg border border-slate-200 bg-white p-6">
         <div>
             <label for="date" class="block text-sm font-medium">Tanggal</label>
-            <input id="date" type="date" wire:model="date" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <input id="date" type="date" wire:model.live="date" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
             @error('date') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
         </div>
         <div>
@@ -78,15 +92,27 @@ new #[Layout('layouts.app')] class extends Component
         </div>
         <div class="grid grid-cols-2 gap-4">
             <div>
-                <label for="open_time" class="block text-sm font-medium">Jam buka</label>
+                <label for="open_time" class="block text-sm font-medium">Buka registrasi</label>
                 <input id="open_time" type="time" wire:model="open_time" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
                 @error('open_time') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
             <div>
-                <label for="close_time" class="block text-sm font-medium">Jam tutup</label>
+                <label for="close_time" class="block text-sm font-medium">Tutup registrasi</label>
                 <input id="close_time" type="time" wire:model="close_time" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
                 @error('close_time') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
             </div>
+        </div>
+        <div>
+            <label for="checkin_closes_at" class="block text-sm font-medium">Batas check-in di JMT</label>
+            <input id="checkin_closes_at" type="datetime-local" wire:model="checkin_closes_at" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <p class="mt-1 text-xs text-slate-500">Kosongkan untuk default: 20:00 pada tanggal sesi. Lewat batas ini supir yang belum check-in dianggap tidak hadir.</p>
+            @error('checkin_closes_at') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
+        </div>
+        <div>
+            <label for="report_closes_at" class="block text-sm font-medium">Batas lapor ritase</label>
+            <input id="report_closes_at" type="datetime-local" wire:model="report_closes_at" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <p class="mt-1 text-xs text-slate-500">Kosongkan untuk default: 06:00 hari berikutnya. Boleh lewat tengah malam.</p>
+            @error('report_closes_at') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
         </div>
         <div>
             <label for="quota" class="block text-sm font-medium">Kuota</label>

@@ -19,26 +19,49 @@ class WorkSession extends Model
     /** @use HasFactory<WorkSessionFactory> */
     use HasFactory, LogsActivity;
 
+    // protected $fillable = [
+    //     'date',
+    //     'route',
+    //     'opens_at',
+    //     'closes_at',
+    //     'quota',
+    //     'token',
+    //     'checkin_closes_at' => 'datetime',
+    //     'created_by',
+    //     'report_closes_at' => 'datetime',
+    // ];
     protected $fillable = [
         'date',
         'route',
         'opens_at',
         'closes_at',
+        'checkin_closes_at',   // <- harus ada
+        'report_closes_at',
         'quota',
         'token',
         'created_by',
-        'report_closes_at' => 'datetime',
     ];
 
     /**
      * @return array<string, string>
      */
+    // protected function casts(): array
+    // {
+    //     return [
+    //         'date' => 'date',
+    //         'opens_at' => 'datetime',
+    //         'closes_at' => 'datetime',
+    //         'report_closes_at' => 'datetime',
+    //         'quota' => 'integer',
+    //     ];
+    // }
     protected function casts(): array
     {
         return [
             'date' => 'date',
             'opens_at' => 'datetime',
             'closes_at' => 'datetime',
+            'checkin_closes_at' => 'datetime',   // <- harus ada
             'report_closes_at' => 'datetime',
             'quota' => 'integer',
         ];
@@ -142,5 +165,16 @@ public function scopeReportable(Builder $query): Builder
             $q->whereRaw('COALESCE(report_closes_at, closes_at) IS NULL')
                 ->orWhereRaw('COALESCE(report_closes_at, closes_at) >= ?', [now()]);
         });
+}
+public function checkInDeadline(): ?Carbon
+{
+    return $this->checkin_closes_at ?? $this->reportDeadline();
+}
+
+public function isCheckInOpen(): bool
+{
+    $deadline = $this->checkInDeadline();
+
+    return $deadline === null || ! $deadline->isPast();
 }
 }

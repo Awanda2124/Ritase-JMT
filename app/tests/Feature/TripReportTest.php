@@ -3,6 +3,7 @@
 use App\Enums\TripReportStatus;
 use App\Exceptions\DriverNotInRosterException;
 use App\Exceptions\LocationNotConfiguredException;
+use App\Exceptions\NotCheckedInException;
 use App\Exceptions\OutsideRadiusException;
 use App\Exceptions\ReportingClosedException;
 use App\Exceptions\ReportLimitExceededException;
@@ -28,6 +29,7 @@ function reportSetup(array $sessionOverrides = []): array
         'work_session_id' => $session->id,
         'driver_id' => $driver->id,
         'registered_at' => now(),
+        'checked_in_at' => now(),
     ]);
 
     return [$session, $driver];
@@ -83,6 +85,20 @@ it('rejects a driver who is not on the session roster', function () {
     expect(fn () => app(TripReportService::class)
         ->submit($session->id, $stranger->id, ['1234'], -6.105176, 106.959152))
         ->toThrow(DriverNotInRosterException::class);
+});
+
+it('rejects a driver who has not checked in', function () {
+    [$session, $driver] = reportSetup();
+    SessionDriver::query()
+        ->where('work_session_id', $session->id)
+        ->where('driver_id', $driver->id)
+        ->update(['checked_in_at' => null]);
+
+    expect(fn () => app(TripReportService::class)
+        ->submit($session->id, $driver->id, ['1234'], -6.105176, 106.959152))
+        ->toThrow(NotCheckedInException::class);
+
+    expect(TripReport::query()->count())->toBe(0);
 });
 
 it('accepts seven reports in one batch', function () {

@@ -2,6 +2,7 @@
 
 use App\Exceptions\DriverNotInRosterException;
 use App\Exceptions\LocationNotConfiguredException;
+use App\Exceptions\NotCheckedInException;
 use App\Exceptions\OutsideRadiusException;
 use App\Exceptions\ReportingClosedException;
 use App\Exceptions\ReportLimitExceededException;
@@ -9,8 +10,6 @@ use App\Models\SessionDriver;
 use App\Models\WorkSession;
 use App\Services\GeofenceService;
 use App\Services\TripReportService;
-use Illuminate\Support\Collection;
-use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -25,11 +24,10 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
 
     public ?string $locationError = null;
 
-    public ?int $workSessionId = null;
+    // Hanya untuk tampilan. Identitas sebenarnya dibaca dari session server.
+    public ?string $driverName = null;
 
-    public ?int $driverId = null;
-
-    public string $search = '';
+    public ?string $sessionLabel = null;
 
     /** @var array<int, string> */
     public array $chassis = [''];
@@ -38,84 +36,35 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
 
     public int $savedCount = 0;
 
-    #[Computed]
-    public function sessions(): Collection
-    {
-        return WorkSession::query()->reportable()->orderBy('date')->get();
-    }
-
-    #[Computed]
-    public function roster(): Collection
-    {
-        if (! $this->locationOk || ! $this->sessions->contains('id', $this->workSessionId)) {
-            return collect();
-        }
-
-        $search = trim($this->search);
-        $like = addcslashes($search, '%_\\');
-
-        return SessionDriver::query()
-            ->where('work_session_id', $this->workSessionId)
-            ->whereHas('driver', function ($query) use ($search, $like) {
-                if ($search === '') {
-                    return;
-                }
-
-                $query->where(function ($q) use ($search, $like) {
-                    $q->where('name', 'like', '%'.$like.'%');
-
-                    // KTP hanya cocok kalau tepat 4 digit terakhir.
-                    if (preg_match('/^\d{4}$/', $search) === 1) {
-                        $q->orWhere('ktp', 'like', '%'.$search);
-                    }
-                });
-            })
-            ->with('driver:id,name')
-            ->get()
-            ->sortBy(fn (SessionDriver $sd) => $sd->driver?->name)
-            ->values()
-            ->take(20);
-    }
-
-    #[Computed]
-    public function selectedDriverName(): ?string
-    {
-        if ($this->driverId === null || ! $this->locationOk) {
-            return null;
-        }
-
-        return SessionDriver::query()
-            ->where('work_session_id', $this->workSessionId)
-            ->where('driver_id', $this->driverId)
-            ->with('driver:id,name')
-            ->first()
-            ?->driver?->name;
-    }
-
     public function mount(): void
     {
-        if ($this->sessions->count() === 1) {
-            $this->workSessionId = $this->sessions->first()->id;
+        $reporter = session('reporter');
+
+        if (! is_array($reporter)) {
+            $this->redirectRoute('public.checkin');
+
+            return;
         }
-    }
 
-    public function updatedWorkSessionId(): void
-    {
-        $this->driverId = null;
-        $this->search = '';
-    }
+        $workSessionId = (int) ($reporter['work_session_id'] ?? 0);
+        $driverId = (int) ($reporter['driver_id'] ?? 0);
 
-    public function selectDriver(int $driverId): void
-    {
-        $this->driverId = $driverId;
-        $this->search = '';
-        $this->resetErrorBag('driverId');
-    }
+        $session = WorkSession::query()->reportable()->find($workSessionId);
+        $sessionDriver = SessionDriver::query()
+            ->where('work_session_id', $workSessionId)
+            ->where('driver_id', $driverId)
+            ->with('driver:id,name')
+            ->first();
 
-    public function clearDriver(): void
-    {
-        $this->driverId = null;
-        $this->search = '';
+        if ($session === null || $sessionDriver === null || $sessionDriver->checked_in_at === null) {
+            session()->forget('reporter');
+            $this->redirectRoute('public.checkin');
+
+            return;
+        }
+
+        $this->driverName = $sessionDriver->driver?->name;
+        $this->sessionLabel = $session->date->translatedFormat('d M Y').' · '.$session->route;
     }
 
     public function setLocation(float $lat, float $lng, GeofenceService $geofence): void
@@ -152,33 +101,32 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
 
     public function submit(TripReportService $reports): void
     {
+        $reporter = session('reporter');
+
+        if (! is_array($reporter)) {
+            $this->redirectRoute('public.checkin');
+
+            return;
+        }
+
         if (! $this->locationOk || $this->lat === null || $this->lng === null) {
             $this->locationError = 'Lokasi belum terverifikasi.';
 
             return;
         }
 
-        if (! $this->sessions->contains('id', $this->workSessionId)) {
-            $this->addError('workSessionId', 'Sesi tidak tersedia.');
-
-            return;
-        }
-
         $this->validate([
-            'workSessionId' => ['required', 'integer'],
-            'driverId' => ['required', 'integer'],
             'chassis' => ['required', 'array', 'min:1', 'max:'.TripReportService::MAX_TRIPS_PER_SESSION],
             'chassis.*' => ['required', 'digits:4'],
         ], [
-            'driverId.required' => 'Pilih nama Anda.',
             'chassis.*.required' => 'Isi 4 digit sasis.',
             'chassis.*.digits' => 'Sasis harus 4 digit angka.',
         ]);
 
         try {
             $this->savedCount = $reports->submit(
-                $this->workSessionId,
-                $this->driverId,
+                (int) ($reporter['work_session_id'] ?? 0),
+                (int) ($reporter['driver_id'] ?? 0),
                 $this->chassis,
                 $this->lat,
                 $this->lng,
@@ -191,9 +139,10 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
             $this->locationOk = false;
             $this->locationError = 'Titik lokasi JMT belum diatur. Hubungi admin.';
         } catch (ReportingClosedException) {
-            $this->addError('workSessionId', 'Pelaporan untuk sesi ini sudah ditutup.');
-        } catch (DriverNotInRosterException) {
-            $this->addError('driverId', 'Nama tidak terdaftar di sesi ini.');
+            $this->addError('chassis', 'Pelaporan untuk sesi ini sudah ditutup.');
+        } catch (DriverNotInRosterException|NotCheckedInException) {
+            session()->forget('reporter');
+            $this->redirectRoute('public.checkin');
         } catch (ReportLimitExceededException $e) {
             $this->addError('chassis', 'Maksimal '.TripReportService::MAX_TRIPS_PER_SESSION.' ritase per sesi. Sudah tercatat: '.$e->alreadyReported.'.');
         }
@@ -201,8 +150,14 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
 
     public function resetForm(): void
     {
-        $this->reset(['driverId', 'search', 'done', 'savedCount']);
+        $this->reset(['done', 'savedCount']);
         $this->chassis = [''];
+    }
+
+    public function switchDriver(): void
+    {
+        session()->forget('reporter');
+        $this->redirectRoute('public.checkin');
     }
 };
 ?>
@@ -232,9 +187,11 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
             );
         }
     }"
+    @if (! $locationOk && ! $done) x-init="locate()" @endif
 >
     <div class="w-full max-w-md rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <h1 class="text-xl font-semibold">Lapor ritase</h1>
+        <p class="mt-1 text-sm text-slate-500">{{ $driverName }} · {{ $sessionLabel }}</p>
 
         @if ($done)
             <p class="mt-6 rounded-md bg-green-50 p-4 text-sm text-green-800">
@@ -243,11 +200,9 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
             <button type="button" wire:click="resetForm" class="mt-4 w-full rounded-md border border-slate-300 px-3 py-3 text-base">
                 Lapor lagi
             </button>
-        @elseif ($this->sessions->isEmpty())
-            <p class="mt-6 rounded-md bg-amber-50 p-4 text-sm text-amber-900">Tidak ada sesi yang sedang membuka pelaporan.</p>
         @elseif (! $locationOk)
-            <p class="mt-2 text-sm text-slate-500">Lapor hanya bisa dilakukan dari area JMT. Izinkan akses lokasi di browser.</p>
-            <button type="button" x-on:click="locate()" x-bind:disabled="loading" class="mt-6 w-full rounded-md bg-slate-900 px-3 py-3 text-base font-medium text-white disabled:opacity-60">
+            <p class="mt-4 text-sm text-slate-500">Memeriksa lokasi Anda. Lapor hanya bisa dari area JMT.</p>
+            <button type="button" x-on:click="locate()" x-bind:disabled="loading" class="mt-4 w-full rounded-md bg-slate-900 px-3 py-3 text-base font-medium text-white disabled:opacity-60">
                 <span x-show="!loading">Cek lokasi saya</span>
                 <span x-show="loading" x-cloak>Mencari lokasi...</span>
             </button>
@@ -257,63 +212,6 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
             @endif
         @else
             <form wire:submit="submit" class="mt-6 space-y-4">
-                @if ($this->sessions->count() > 1)
-                    <div>
-                        <label for="session" class="block text-sm font-medium">Sesi</label>
-                        <select id="session" wire:model.live="workSessionId" class="mt-1 w-full rounded-md border border-slate-300 px-3 py-3 text-base">
-                            <option value="">Pilih sesi</option>
-                            @foreach ($this->sessions as $session)
-                                <option value="{{ $session->id }}">{{ $session->date->translatedFormat('d M Y') }} · {{ $session->route }}</option>
-                            @endforeach
-                        </select>
-                        @error('workSessionId') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                    </div>
-                @else
-                    @error('workSessionId') <p class="text-sm text-red-600">{{ $message }}</p> @enderror
-                @endif
-
-                <div x-data="{ open: false }" x-on:click.outside="open = false">
-                    <label for="driver" class="block text-sm font-medium">Nama</label>
-
-                    @if ($this->selectedDriverName)
-                        <div class="mt-1 flex items-center justify-between rounded-md border border-slate-300 px-3 py-3 text-base">
-                            <span>{{ $this->selectedDriverName }}</span>
-                            <button type="button" wire:click="clearDriver" class="text-sm underline">Ganti</button>
-                        </div>
-                    @else
-                        <div class="relative">
-                            <input
-                                id="driver"
-                                type="text"
-                                autocomplete="off"
-                                wire:model.live.debounce.300ms="search"
-                                x-on:focus="open = true"
-                                x-on:input="open = true"
-                                placeholder="Ketik nama atau 4 digit KTP"
-                                class="mt-1 w-full rounded-md border border-slate-300 px-3 py-3 text-base"
-                            >
-                            <ul x-show="open" x-cloak class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-slate-300 bg-white shadow-lg">
-                                @forelse ($this->roster as $sessionDriver)
-                                    <li wire:key="drv-{{ $sessionDriver->driver_id }}">
-                                        <button
-                                            type="button"
-                                            wire:click="selectDriver({{ $sessionDriver->driver_id }})"
-                                            x-on:click="open = false"
-                                            class="block w-full px-3 py-3 text-left text-base hover:bg-slate-100"
-                                        >
-                                            {{ $sessionDriver->driver?->name }}
-                                        </button>
-                                    </li>
-                                @empty
-                                    <li class="px-3 py-3 text-sm text-slate-500">Nama tidak ditemukan.</li>
-                                @endforelse
-                            </ul>
-                        </div>
-                    @endif
-
-                    @error('driverId') <p class="mt-1 text-sm text-red-600">{{ $message }}</p> @enderror
-                </div>
-
                 <div>
                     <p class="block text-sm font-medium">4 digit terakhir sasis (satu per karcis)</p>
                     <div class="mt-1 space-y-2">
@@ -338,5 +236,7 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
                 </button>
             </form>
         @endif
+
+        <button type="button" wire:click="switchDriver" class="mt-6 text-sm text-slate-500 underline">Bukan {{ $driverName }}? Ganti nama</button>
     </div>
 </div>

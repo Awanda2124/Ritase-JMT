@@ -2,7 +2,9 @@
 
 use App\Models\SessionDriver;
 use App\Models\WorkSession;
+use App\Services\CheckInService;
 use App\Services\DriverRegistrationService;
+use App\Support\RoleName;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
@@ -26,14 +28,34 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
         $this->workSession->refresh();
         session()->flash('status', 'Supir dihapus dari roster.');
     }
+
+    public function checkInManually(int $sessionDriverId, CheckInService $checkIn): void
+    {
+        abort_unless(auth()->user()?->hasRole(RoleName::ADMIN), 403);
+
+        $sessionDriver = SessionDriver::query()
+            ->where('work_session_id', $this->workSession->id)
+            ->findOrFail($sessionDriverId);
+
+        $checkIn->checkInManually($sessionDriver, auth()->user());
+        $this->workSession->refresh();
+        session()->flash('status', 'Check-in manual dicatat.');
+    }
 };
 ?>
 
 <div>
     <p class="text-sm"><a href="{{ route('work-sessions.index') }}" class="underline">Sesi kerja</a></p>
     <h1 class="mt-2 text-2xl font-semibold">{{ $workSession->date->translatedFormat('d M Y') }}</h1>
-    <p class="mt-1 text-slate-600">{{ $workSession->route }} · {{ $workSession->opens_at->format('H:i') }}–{{ $workSession->closes_at->format('H:i') }}</p>
-    <p class="mt-1 text-sm text-slate-500">Kuota terisi {{ $workSession->sessionDrivers()->count() }}/{{ $workSession->quota }}</p>
+    <p class="mt-1 text-slate-600">{{ $workSession->route }} · registrasi {{ $workSession->opens_at->format('H:i') }}–{{ $workSession->closes_at->format('H:i') }}</p>
+    <p class="mt-1 text-sm text-slate-500">
+        Batas check-in {{ $workSession->checkInDeadline()?->translatedFormat('d M, H:i') ?? '-' }}
+        · Batas lapor {{ $workSession->reportDeadline()?->translatedFormat('d M, H:i') ?? '-' }}
+    </p>
+    <p class="mt-1 text-sm text-slate-500">
+        Kuota terisi {{ $workSession->sessionDrivers()->count() }}/{{ $workSession->quota }}
+        · Hadir {{ $workSession->sessionDrivers()->whereNotNull('checked_in_at')->count() }}
+    </p>
 
     @if (session('status'))
         <p class="mt-4 text-sm text-green-700">{{ session('status') }}</p>
@@ -42,6 +64,8 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
     <div class="mt-6 rounded-lg border border-slate-200 bg-white p-4">
         <h2 class="font-medium">Link registrasi</h2>
         <p class="mt-1 break-all text-sm text-slate-700">{{ $workSession->registrationUrl() }}</p>
+        <h2 class="mt-4 font-medium">Link check-in (di JMT)</h2>
+        <p class="mt-1 break-all text-sm text-slate-700">{{ route('public.checkin') }}</p>
         <a href="{{ route('work-sessions.edit', $workSession) }}" class="mt-3 inline-block text-sm underline">Ubah sesi</a>
     </div>
 
@@ -52,6 +76,7 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                     <th class="px-4 py-3 font-medium">Nama</th>
                     <th class="px-4 py-3 font-medium">No. KTP</th>
                     <th class="px-4 py-3 font-medium">Daftar</th>
+                    <th class="px-4 py-3 font-medium">Check-in</th>
                     <th class="px-4 py-3 font-medium"></th>
                 </tr>
             </thead>
@@ -61,7 +86,22 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                         <td class="px-4 py-3">{{ $roster->driver->name }}</td>
                         <td class="px-4 py-3 font-mono">{{ $roster->driver->maskedKtp() }}</td>
                         <td class="px-4 py-3">{{ $roster->registered_at->format('H:i') }}</td>
-                        <td class="px-4 py-3 text-right">
+                        <td class="px-4 py-3">
+                            @if ($roster->checked_in_at)
+                                {{ $roster->checked_in_at->format('H:i') }}
+                                @if ($roster->checked_in_by)
+                                    <span class="text-xs text-slate-500">(manual)</span>
+                                @endif
+                            @else
+                                <span class="text-slate-400">Belum</span>
+                            @endif
+                        </td>
+                        <td class="space-x-3 px-4 py-3 text-right">
+                            @if (! $roster->checked_in_at)
+                                <button type="button" wire:click="checkInManually({{ $roster->id }})" wire:confirm="Catat {{ $roster->driver->name }} sebagai hadir (check-in manual)?" class="underline">
+                                    Check-in manual
+                                </button>
+                            @endif
                             <button type="button" wire:click="remove({{ $roster->id }})" wire:confirm="Hapus supir dari roster?" class="text-red-700 underline">
                                 Hapus
                             </button>
@@ -69,7 +109,7 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                     </tr>
                 @empty
                     <tr>
-                        <td colspan="4" class="px-4 py-6 text-slate-500">Belum ada supir terdaftar.</td>
+                        <td colspan="5" class="px-4 py-6 text-slate-500">Belum ada supir terdaftar.</td>
                     </tr>
                 @endforelse
             </tbody>

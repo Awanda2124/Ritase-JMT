@@ -53,7 +53,10 @@ new #[Layout('layouts.guest')] #[Title('Registrasi supir')] class extends Compon
         <p class="mt-1 text-sm text-slate-500">{{ $workSession->route }} · {{ $workSession->date->translatedFormat('d M Y') }}</p>
 
         @if ($registered)
-            <p class="mt-6 rounded-md bg-green-50 p-4 text-sm text-green-800">Pendaftaran berhasil. Silakan datang ke JMT untuk lapor ritase.</p>
+            <!-- <p class="mt-6 rounded-md bg-green-50 p-4 text-sm text-green-800">Pendaftaran berhasil. Silakan datang ke JMT untuk lapor ritase.</p> -->
+            <p class="mt-6 rounded-md bg-green-50 p-4 text-sm text-green-800">
+                Pendaftaran berhasil. Saat tiba di JMT, buka <span class="font-medium">{{ route('public.checkin') }}</span> untuk check-in.
+            </p>
         <!-- @elseif ($workSession->isFull())
             <p class="mt-6 rounded-md bg-amber-50 p-4 text-lg font-semibold text-amber-900">Penuh</p>
             <p class="mt-2 text-sm text-slate-600">Kuota sesi ini sudah habis.</p> -->

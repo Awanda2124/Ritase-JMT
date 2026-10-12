@@ -12,6 +12,7 @@ use App\Models\WorkSession;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
+use App\Exceptions\NotCheckedInException;
 use InvalidArgumentException;
 
 class TripReportService
@@ -69,6 +70,10 @@ class TripReportService
 
             if ($sessionDriver === null) {
                 throw new DriverNotInRosterException;
+            }
+
+            if ($sessionDriver->checked_in_at === null) {
+                throw new NotCheckedInException;
             }
 
             $existing = TripReport::query()
