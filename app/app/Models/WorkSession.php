@@ -100,4 +100,18 @@ class WorkSession extends Model
     {
         return $this->remainingQuota() === 0;
     }
+    public function hasOpened(): bool
+{
+    return $this->opens_at === null || ! $this->opens_at->isFuture();
+}
+
+public function hasClosed(): bool
+{
+    return $this->closes_at !== null && $this->closes_at->isPast();
+}
+
+public function isOpen(): bool
+{
+    return $this->hasOpened() && ! $this->hasClosed();
+}
 }

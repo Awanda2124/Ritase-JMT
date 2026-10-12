@@ -17,15 +17,11 @@ class WorkSessionFactory extends Factory
      */
     public function definition(): array
     {
-        $date = fake()->dateTimeBetween('now', '+1 week');
-        $opensAt = (clone $date)->setTime(6, 0);
-        $closesAt = (clone $date)->setTime(18, 0);
-
         return [
-            'date' => $date->format('Y-m-d'),
+            'date' => now()->toDateString(),
             'route' => 'Langsiran IKT - JMT2',
-            'opens_at' => $opensAt,
-            'closes_at' => $closesAt,
+            'opens_at' => now()->subHour(),
+            'closes_at' => now()->addHours(8),
             'quota' => 50,
             'token' => Str::lower(Str::random(64)),
             'created_by' => User::factory(),

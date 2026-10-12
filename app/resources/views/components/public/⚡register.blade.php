@@ -8,6 +8,7 @@ use App\Services\DriverRegistrationService;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use App\Exceptions\SessionNotOpenException;
 
 new #[Layout('layouts.guest')] #[Title('Registrasi supir')] class extends Component
 {
@@ -26,7 +27,7 @@ new #[Layout('layouts.guest')] #[Title('Registrasi supir')] class extends Compon
 
     public function submit(DriverRegistrationService $registration): void
     {
-        if ($this->workSession->isFull()) {
+        if (! $this->workSession->isOpen() || $this->workSession->isFull()) {
             return;
         }
 
@@ -37,7 +38,7 @@ new #[Layout('layouts.guest')] #[Title('Registrasi supir')] class extends Compon
             $registration->register($this->workSession, $validated['name'], $validated['ktp']);
             $this->registered = true;
             $this->workSession->refresh();
-        } catch (QuotaFullException) {
+        } catch (QuotaFullException|SessionNotOpenException) {
             $this->workSession->refresh();
         } catch (AlreadyRegisteredException) {
             $this->addError('ktp', 'KTP ini sudah terdaftar pada sesi ini.');
@@ -53,9 +54,16 @@ new #[Layout('layouts.guest')] #[Title('Registrasi supir')] class extends Compon
 
         @if ($registered)
             <p class="mt-6 rounded-md bg-green-50 p-4 text-sm text-green-800">Pendaftaran berhasil. Silakan datang ke JMT untuk lapor ritase.</p>
-        @elseif ($workSession->isFull())
+        <!-- @elseif ($workSession->isFull())
             <p class="mt-6 rounded-md bg-amber-50 p-4 text-lg font-semibold text-amber-900">Penuh</p>
-            <p class="mt-2 text-sm text-slate-600">Kuota sesi ini sudah habis.</p>
+            <p class="mt-2 text-sm text-slate-600">Kuota sesi ini sudah habis.</p> -->
+        @elseif ($workSession->hasClosed())
+            <p class="mt-6 rounded-md bg-amber-50 p-4 text-lg font-semibold text-amber-900">Pendaftaran ditutup</p>
+            <p class="mt-2 text-sm text-slate-600">Sesi ini sudah melewati jam penutupan.</p>
+        @elseif (! $workSession->hasOpened())
+            <p class="mt-6 rounded-md bg-amber-50 p-4 text-lg font-semibold text-amber-900">Belum dibuka</p>
+            <p class="mt-2 text-sm text-slate-600">Pendaftaran dibuka {{ $workSession->opens_at->translatedFormat('d M Y, H:i') }}.</p>
+        @elseif ($workSession->isFull())
         @else
             <p class="mt-2 text-sm text-slate-500">Sisa kuota: {{ $workSession->remainingQuota() }}</p>
             <form wire:submit="submit" class="mt-6 space-y-4">
