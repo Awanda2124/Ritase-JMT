@@ -16,6 +16,7 @@ Route::middleware('guest')->group(function () {
 });
 
 Route::livewire('/daftar/{token}', 'public.register')->name('public.register');
+Route::livewire('/lapor', 'public.report')->name('public.report');
 
 Route::middleware(['auth', 'role:'.RoleName::ADMIN])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');

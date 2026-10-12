@@ -5,7 +5,6 @@ use App\Services\WorkSessionService;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
-use RuntimeException;
 
 new #[Layout('layouts.app')] #[Title('Sesi kerja')] class extends Component
 {
@@ -16,7 +15,7 @@ new #[Layout('layouts.app')] #[Title('Sesi kerja')] class extends Component
         try {
             $sessions->delete($session);
             session()->flash('status', 'Sesi dihapus.');
-        } catch (RuntimeException $exception) {
+        } catch (\RuntimeException $exception) {
             session()->flash('error', $exception->getMessage());
         }
     }

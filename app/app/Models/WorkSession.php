@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Carbon;
 
 class WorkSession extends Model
 {
@@ -25,6 +27,7 @@ class WorkSession extends Model
         'quota',
         'token',
         'created_by',
+        'report_closes_at' => 'datetime',
     ];
 
     /**
@@ -36,6 +39,7 @@ class WorkSession extends Model
             'date' => 'date',
             'opens_at' => 'datetime',
             'closes_at' => 'datetime',
+            'report_closes_at' => 'datetime',
             'quota' => 'integer',
         ];
     }
@@ -113,5 +117,30 @@ public function hasClosed(): bool
 public function isOpen(): bool
 {
     return $this->hasOpened() && ! $this->hasClosed();
+}
+public function reportDeadline(): ?Carbon
+{
+    return $this->report_closes_at ?? $this->closes_at;
+}
+
+public function isReportingOpen(): bool
+{
+    if (! $this->hasOpened()) {
+        return false;
+    }
+
+    $deadline = $this->reportDeadline();
+
+    return $deadline === null || ! $deadline->isPast();
+}
+
+public function scopeReportable(Builder $query): Builder
+{
+    return $query
+        ->where(fn (Builder $q) => $q->whereNull('opens_at')->orWhere('opens_at', '<=', now()))
+        ->where(function (Builder $q) {
+            $q->whereRaw('COALESCE(report_closes_at, closes_at) IS NULL')
+                ->orWhereRaw('COALESCE(report_closes_at, closes_at) >= ?', [now()]);
+        });
 }
 }
