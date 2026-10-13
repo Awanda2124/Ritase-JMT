@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\SettingService;
 use Database\Factories\WorkSessionFactory;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -27,6 +28,7 @@ class WorkSession extends Model
         'checkin_closes_at',
         'report_closes_at',
         'quota',
+        'rate_per_trip',
         'token',
         'created_by',
     ];
@@ -43,6 +45,7 @@ class WorkSession extends Model
             'checkin_closes_at' => 'datetime',
             'report_closes_at' => 'datetime',
             'quota' => 'integer',
+            'rate_per_trip' => 'integer',
         ];
     }
 
@@ -52,6 +55,10 @@ class WorkSession extends Model
             if (blank($session->token)) {
                 $session->token = Str::lower(Str::random(64));
             }
+
+            // Tarif dibekukan saat sesi dibuat, supaya export sesi lama tidak
+            // berubah kalau tarif di Pengaturan diubah belakangan.
+            $session->rate_per_trip ??= (int) app(SettingService::class)->ratePerTrip();
         });
     }
 
@@ -93,6 +100,12 @@ class WorkSession extends Model
     public function registrationUrl(): string
     {
         return route('public.register', ['token' => $this->token]);
+    }
+
+    /** Tarif beku saat sesi dibuat; sesi lama (null) ikut tarif terkini. */
+    public function ratePerTrip(): int
+    {
+        return $this->rate_per_trip ?? (int) app(SettingService::class)->ratePerTrip();
     }
 
     public function remainingQuota(): int
