@@ -61,12 +61,96 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
         <p class="mt-4 text-sm text-green-700">{{ session('status') }}</p>
     @endif
 
-    <div class="mt-6 rounded-lg border border-slate-200 bg-white p-4">
-        <h2 class="font-medium">Link registrasi</h2>
-        <p class="mt-1 break-all text-sm text-slate-700">{{ $workSession->registrationUrl() }}</p>
-        <h2 class="mt-4 font-medium">Link check-in (di JMT)</h2>
-        <p class="mt-1 break-all text-sm text-slate-700">{{ route('public.checkin') }}</p>
-        <a href="{{ route('work-sessions.edit', $workSession) }}" class="mt-3 inline-block text-sm underline">Ubah sesi</a>
+    <div class="mt-6 space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+        {{-- Link Registrasi --}}
+        <div x-data="{
+                copied: false,
+                async copy(text) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                    } catch (e) {
+                        const ta = document.createElement('textarea');
+                        ta.value = text;
+                        ta.style.position = 'fixed';
+                        ta.style.opacity = '0';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                    }
+                    this.copied = true;
+                    setTimeout(() => this.copied = false, 2000);
+                }
+            }">
+            <h2 class="font-medium">Link registrasi</h2>
+            <div class="mt-1 flex items-start gap-2">
+                <p class="min-w-0 flex-1 break-all rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">{{ $workSession->registrationUrl() }}</p>
+                <button
+                    type="button"
+                    x-on:click="copy('{{ $workSession->registrationUrl() }}')"
+                    class="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                    <span x-show="!copied" class="inline-flex items-center gap-1.5">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Salin
+                    </span>
+                    <span x-show="copied" x-cloak class="inline-flex items-center gap-1.5 text-green-700">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Tersalin
+                    </span>
+                </button>
+            </div>
+        </div>
+
+        {{-- Link Check-in --}}
+        <div x-data="{
+                copied: false,
+                async copy(text) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                    } catch (e) {
+                        const ta = document.createElement('textarea');
+                        ta.value = text;
+                        ta.style.position = 'fixed';
+                        ta.style.opacity = '0';
+                        document.body.appendChild(ta);
+                        ta.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(ta);
+                    }
+                    this.copied = true;
+                    setTimeout(() => this.copied = false, 2000);
+                }
+            }">
+            <h2 class="font-medium">Link check-in (di JMT)</h2>
+            <div class="mt-1 flex items-start gap-2">
+                <p class="min-w-0 flex-1 break-all rounded-md bg-slate-50 px-3 py-2 text-sm text-slate-700">{{ route('public.checkin') }}</p>
+                <button
+                    type="button"
+                    x-on:click="copy('{{ route('public.checkin') }}')"
+                    class="shrink-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                >
+                    <span x-show="!copied" class="inline-flex items-center gap-1.5">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        Salin
+                    </span>
+                    <span x-show="copied" x-cloak class="inline-flex items-center gap-1.5 text-green-700">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                        Tersalin
+                    </span>
+                </button>
+            </div>
+        </div>
+
+        <a href="{{ route('work-sessions.edit', $workSession) }}" class="inline-block text-sm underline">Ubah sesi</a>
     </div>
 
     <div class="mt-6 overflow-x-auto rounded-lg border border-slate-200 bg-white">

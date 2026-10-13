@@ -15,7 +15,9 @@ use Illuminate\Validation\ValidationException;
 class CheckInService
 {
     private const IP_MAX_ATTEMPTS = 60;
+
     private const DRIVER_MAX_ATTEMPTS = 10;
+
     private const DECAY_SECONDS = 60;
 
     public function __construct(private GeofenceService $geofence) {}

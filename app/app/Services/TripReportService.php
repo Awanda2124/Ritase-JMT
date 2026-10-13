@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\TripReportStatus;
 use App\Exceptions\DriverNotInRosterException;
+use App\Exceptions\NotCheckedInException;
 use App\Exceptions\ReportingClosedException;
 use App\Exceptions\ReportLimitExceededException;
 use App\Models\SessionDriver;
@@ -12,7 +13,6 @@ use App\Models\WorkSession;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
-use App\Exceptions\NotCheckedInException;
 use InvalidArgumentException;
 
 class TripReportService
@@ -20,7 +20,9 @@ class TripReportService
     public const MAX_TRIPS_PER_SESSION = 7;
 
     private const IP_MAX_ATTEMPTS = 60;      // per menit per IP (banyak supir bisa satu jaringan)
+
     private const DRIVER_MAX_ATTEMPTS = 10;  // per menit per supir
+
     private const DECAY_SECONDS = 60;
 
     public function __construct(private GeofenceService $geofence) {}

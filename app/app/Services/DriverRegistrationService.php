@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\AlreadyRegisteredException;
 use App\Exceptions\QuotaFullException;
+use App\Exceptions\SessionNotOpenException;
 use App\Models\Driver;
 use App\Models\SessionDriver;
 use App\Models\User;
@@ -11,7 +12,6 @@ use App\Models\WorkSession;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
-use App\Exceptions\SessionNotOpenException;
 
 // class DriverRegistrationService
 // {
@@ -103,7 +103,9 @@ use App\Exceptions\SessionNotOpenException;
 class DriverRegistrationService
 {
     private const IP_MAX_ATTEMPTS = 60;   // per menit per IP (banyak supir bisa satu jaringan)
+
     private const KTP_MAX_ATTEMPTS = 5;   // per menit per KTP (cegah spam satu orang)
+
     private const DECAY_SECONDS = 60;
 
     public function register(WorkSession $session, string $name, string $ktp): SessionDriver

@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\SessionNotOpenException;
+use App\Models\Driver;
 use App\Models\WorkSession;
 use App\Services\DriverRegistrationService;
 
@@ -33,7 +34,7 @@ it('does not create a driver when the session is closed', function () {
     } catch (SessionNotOpenException) {
     }
 
-    expect(\App\Models\Driver::query()->where('ktp', '3171010101010003')->exists())->toBeFalse();
+    expect(Driver::query()->where('ktp', '3171010101010003')->exists())->toBeFalse();
 });
 
 it('shows a closed message on the public page', function () {

@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Models\WorkSession;
+use App\Services\SettingService;
 use App\Support\RoleName;
 use Database\Seeders\RoleSeeder;
 use Database\Seeders\SettingSeeder;
@@ -53,6 +54,6 @@ it('lets an admin update settings from the settings table', function () {
         ->call('save')
         ->assertHasNoErrors();
 
-    expect(app(\App\Services\SettingService::class)->ratePerTrip())->toBe(75000)
-        ->and(app(\App\Services\SettingService::class)->radiusMeters())->toBe(80);
+    expect(app(SettingService::class)->ratePerTrip())->toBe(75000)
+        ->and(app(SettingService::class)->radiusMeters())->toBe(80);
 });

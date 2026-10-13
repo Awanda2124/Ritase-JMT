@@ -28,6 +28,7 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
     public ?int $workSessionId = null;
 
     public ?int $driverId = null;
+
     public string $search = '';
 
     /** @var array<int, string> */

@@ -18,11 +18,11 @@ class SessionDriver extends Model
         'work_session_id',
         'driver_id',
         'registered_at',
-        'note',
         'checked_in_at',
         'checked_in_lat',
         'checked_in_lng',
         'checked_in_by',
+        'note',
     ];
 
     /**
@@ -36,11 +36,6 @@ class SessionDriver extends Model
             'checked_in_lat' => 'decimal:7',
             'checked_in_lng' => 'decimal:7',
         ];
-    }
-
-    public function checkedInBy(): BelongsTo
-    {
-        return $this->belongsTo(User::class, 'checked_in_by');
     }
 
     public function getActivitylogOptions(): LogOptions
@@ -59,5 +54,10 @@ class SessionDriver extends Model
     public function driver(): BelongsTo
     {
         return $this->belongsTo(Driver::class);
+    }
+
+    public function checkedInBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'checked_in_by');
     }
 }
