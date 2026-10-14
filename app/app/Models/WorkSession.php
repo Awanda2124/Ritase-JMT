@@ -11,7 +11,6 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Str;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -29,7 +28,6 @@ class WorkSession extends Model
         'report_closes_at',
         'quota',
         'rate_per_trip',
-        'token',
         'created_by',
     ];
 
@@ -52,10 +50,6 @@ class WorkSession extends Model
     protected static function booted(): void
     {
         static::creating(function (WorkSession $session): void {
-            if (blank($session->token)) {
-                $session->token = Str::lower(Str::random(64));
-            }
-
             // Tarif dibekukan saat sesi dibuat, supaya export sesi lama tidak
             // berubah kalau tarif di Pengaturan diubah belakangan.
             $session->rate_per_trip ??= (int) app(SettingService::class)->ratePerTrip();
@@ -75,6 +69,11 @@ class WorkSession extends Model
         return $this->belongsTo(User::class, 'created_by');
     }
 
+    public function groups(): HasMany
+    {
+        return $this->hasMany(SessionGroup::class)->orderBy('id');
+    }
+
     public function sessionDrivers(): HasMany
     {
         return $this->hasMany(SessionDriver::class);
@@ -83,7 +82,7 @@ class WorkSession extends Model
     public function drivers(): BelongsToMany
     {
         return $this->belongsToMany(Driver::class, 'session_drivers')
-            ->withPivot(['registered_at', 'note'])
+            ->withPivot(['session_group_id', 'registered_at', 'note'])
             ->withTimestamps();
     }
 
@@ -97,17 +96,13 @@ class WorkSession extends Model
         return $this->hasMany(Receipt::class);
     }
 
-    public function registrationUrl(): string
-    {
-        return route('public.register', ['token' => $this->token]);
-    }
-
     /** Tarif beku saat sesi dibuat; sesi lama (null) ikut tarif terkini. */
     public function ratePerTrip(): int
     {
         return $this->rate_per_trip ?? (int) app(SettingService::class)->ratePerTrip();
     }
 
+    /** Sisa kuota total semua kelompok. Kuota per kelompok ada di SessionGroup. */
     public function remainingQuota(): int
     {
         $registered = $this->session_drivers_count ?? $this->sessionDrivers()->count();
