@@ -65,7 +65,7 @@ it('allows an admin to open the dashboard', function () {
     $this->actingAs($user)
         ->get(route('dashboard'))
         ->assertOk()
-        ->assertSee('Dasbor');
+        ->assertSee('Dashboard Operasional');
 });
 
 it('throttles repeated failed logins', function () {
