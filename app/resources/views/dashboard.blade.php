@@ -145,7 +145,7 @@
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
                 <div>
                     <h2 class="text-base font-bold text-slate-900">Aktivitas sesi</h2>
-                    <p class="text-xs text-slate-500">Supir terbaru di sesi aktif.</p>
+                    <p class="text-xs text-slate-500">Semua supir di sesi aktif ({{ $recentDrivers->count() }}). Geser untuk melihat semua.</p>
                 </div>
                 @if ($activeSession)
                     <a href="{{ route('work-sessions.show', $activeSession) }}"
@@ -171,15 +171,44 @@
                     </p>
                 </div>
             @else
-                <div class="overflow-x-auto">
-                    <table class="min-w-full text-left text-sm">
-                        <thead>
+                @php
+                    $sortIcons = '<svg class="si si-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 9l4-4 4 4M8 15l4 4 4-4"/></svg>'
+                        .'<svg class="si si-asc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7"/></svg>'
+                        .'<svg class="si si-desc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>';
+                @endphp
+
+                <style>
+                    #activity-table th[data-sort] { cursor: pointer; user-select: none; transition: color .15s; }
+                    #activity-table th[data-sort]:hover,
+                    #activity-table th[data-sort][aria-sort="ascending"],
+                    #activity-table th[data-sort][aria-sort="descending"] { color: #0f172a; }
+                    #activity-table .sort-label { display: inline-flex; align-items: center; gap: 4px; }
+                    #activity-table .si { display: none; width: 12px; height: 12px; flex-shrink: 0; }
+                    #activity-table th[aria-sort="none"] .si-none { display: inline; opacity: .35; }
+                    #activity-table th[aria-sort="none"]:hover .si-none { opacity: .8; }
+                    #activity-table th[aria-sort="ascending"] .si-asc { display: inline; }
+                    #activity-table th[aria-sort="descending"] .si-desc { display: inline; }
+                </style>
+
+                <div style="max-height: 440px; overflow: auto;">
+                    <table id="activity-table" class="min-w-full text-left text-sm">
+                        <thead style="position: sticky; top: 0; z-index: 1; background: #fff; box-shadow: 0 1px 0 #f1f5f9;">
                             <tr class="border-b border-slate-100">
-                                <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Nama supir</th>
-                                <th class="px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">KTP</th>
-                                <th class="px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Check-in</th>
-                                <th class="px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Status</th>
-                                <th class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">Ritase</th>
+                                <th data-sort="text" aria-sort="none" tabindex="0" class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                    <span class="sort-label">Nama supir {!! $sortIcons !!}</span>
+                                </th>
+                                <th data-sort="text" aria-sort="none" tabindex="0" class="px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                    <span class="sort-label">KTP {!! $sortIcons !!}</span>
+                                </th>
+                                <th data-sort="date" aria-sort="none" tabindex="0" class="px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                    <span class="sort-label">Check-in {!! $sortIcons !!}</span>
+                                </th>
+                                <th data-sort="text" aria-sort="none" tabindex="0" class="px-3 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                    <span class="sort-label">Status {!! $sortIcons !!}</span>
+                                </th>
+                                <th data-sort="number" aria-sort="none" tabindex="0" class="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500">
+                                    <span class="sort-label">Total Ritase {!! $sortIcons !!}</span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -189,7 +218,7 @@
                                     $ritaseCount = $reportCounts[$sd->driver_id] ?? 0;
                                 @endphp
                                 <tr class="transition-colors hover:bg-slate-50/60">
-                                    <td class="px-5 py-3">
+                                    <td class="px-5 py-3" data-value="{{ $sd->driver->name }}">
                                         <div class="flex items-center gap-3">
                                             <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">
                                                 {{ mb_strtoupper($initials) }}
@@ -197,11 +226,11 @@
                                             <span class="font-semibold text-slate-900">{{ $sd->driver->name }}</span>
                                         </div>
                                     </td>
-                                    <td class="px-3 py-3 font-mono text-xs text-slate-500">{{ $sd->driver->maskedKtp() }}</td>
-                                    <td class="px-3 py-3 text-slate-600">
+                                    <td class="px-3 py-3 font-mono text-xs text-slate-500" data-value="{{ $sd->driver->maskedKtp() }}">{{ $sd->driver->maskedKtp() }}</td>
+                                    <td class="px-3 py-3 text-slate-600" data-value="{{ $sd->checked_in_at?->timestamp }}">
                                         {{ $sd->checked_in_at ? $sd->checked_in_at->format('H:i') : '—' }}
                                     </td>
-                                    <td class="px-3 py-3">
+                                    <td class="px-3 py-3" data-value="{{ $sd->checked_in_at ? 'Di lokasi' : 'Belum check-in' }}">
                                         @if ($sd->checked_in_at)
                                             <span class="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
                                                 <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
@@ -214,12 +243,65 @@
                                             </span>
                                         @endif
                                     </td>
-                                    <td class="px-5 py-3 text-right font-semibold text-slate-900">{{ $ritaseCount }}</td>
+                                    <td class="px-5 py-3 text-right font-semibold text-slate-900" data-value="{{ $ritaseCount }}">{{ $ritaseCount }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
                     </table>
                 </div>
+
+                <script>
+                    (() => {
+                        const table = document.getElementById('activity-table');
+                        if (!table || table.dataset.sortReady) return;
+                        table.dataset.sortReady = '1';
+
+                        const tbody = table.tBodies[0];
+                        const headers = Array.from(table.tHead.querySelectorAll('th[data-sort]'));
+                        const collator = new Intl.Collator('id', { sensitivity: 'base', numeric: true });
+
+                        // Simpan urutan asli untuk tie-break
+                        Array.from(tbody.rows).forEach((row, i) => { row.dataset.index = i; });
+
+                        const read = (row, col, type) => {
+                            const raw = row.cells[col].dataset.value ?? '';
+                            if (raw === '') return null;                // kosong selalu di paling bawah
+                            return type === 'text' ? raw : Number(raw); // number & date (timestamp)
+                        };
+
+                        const sortBy = (th) => {
+                            const col = th.cellIndex;
+                            const type = th.dataset.sort;
+                            const dir = th.getAttribute('aria-sort') === 'ascending' ? 'descending' : 'ascending';
+                            const factor = dir === 'ascending' ? 1 : -1;
+
+                            headers.forEach((h) => h.setAttribute('aria-sort', 'none'));
+                            th.setAttribute('aria-sort', dir);
+
+                            Array.from(tbody.rows)
+                                .sort((a, b) => {
+                                    const va = read(a, col, type);
+                                    const vb = read(b, col, type);
+                                    if (va === null && vb === null) return a.dataset.index - b.dataset.index;
+                                    if (va === null) return 1;
+                                    if (vb === null) return -1;
+                                    const cmp = type === 'text' ? collator.compare(va, vb) : va - vb;
+                                    return cmp !== 0 ? cmp * factor : a.dataset.index - b.dataset.index;
+                                })
+                                .forEach((row) => tbody.appendChild(row));
+                        };
+
+                        headers.forEach((th) => {
+                            th.addEventListener('click', () => sortBy(th));
+                            th.addEventListener('keydown', (e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    sortBy(th);
+                                }
+                            });
+                        });
+                    })();
+                </script>
             @endif
 
         </div>
@@ -266,9 +348,7 @@
                         </div>
                         <span class="text-sm font-medium text-slate-700">Supir di lokasi</span>
                     </div>
-                    <span class="text-lg font-bold text-slate-900">
-                        {{ $activeSession ? $activeSession->sessionDrivers()->whereNotNull('checked_in_at')->count() : 0 }}
-                    </span>
+                    <span class="text-lg font-bold text-slate-900">{{ $hadirCount }}</span>
                 </div>
 
                 <div class="flex items-center justify-between gap-3 px-5 py-4">

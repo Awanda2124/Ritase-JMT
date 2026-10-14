@@ -25,12 +25,6 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
 
     public int $perPage = 10;
 
-    /** Pause auto-refresh saat user lagi search/filter biar gak ganggu input. */
-    protected function getPollingInterval(): ?string
-    {
-        return (empty($this->search) && $this->checkInFilter === 'semua') ? '5s' : null;
-    }
-
     public function mount(WorkSession $workSession): void
     {
         $this->workSession = $workSession;
@@ -56,9 +50,15 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
     {
         return $this->workSession
             ->sessionDrivers()
-            ->with(['driver', 'group'])
+            ->with(['driver:id,name,ktp', 'group:id,name'])
             ->oldest('registered_at')
             ->get();
+    }
+
+    #[Computed]
+    public function groups(): \Illuminate\Support\Collection
+    {
+        return $this->workSession->groups()->withCount('sessionDrivers')->get();
     }
 
     #[Computed]
@@ -109,8 +109,7 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             ->findOrFail($sessionDriverId);
 
         $registration->removeFromRoster($sessionDriver, auth()->user());
-        $this->workSession->refresh();
-        unset($this->allRoster, $this->filteredRoster, $this->visibleRoster, $this->countSudah, $this->countBelum);
+        unset($this->allRoster, $this->groups, $this->filteredRoster, $this->visibleRoster, $this->countSudah, $this->countBelum);
         session()->flash('status', 'Supir dihapus dari roster.');
     }
 
@@ -123,24 +122,25 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             ->findOrFail($sessionDriverId);
 
         $checkIn->checkInManually($sessionDriver, auth()->user());
-        $this->workSession->refresh();
-        unset($this->allRoster, $this->filteredRoster, $this->visibleRoster, $this->countSudah, $this->countBelum);
+        unset($this->allRoster, $this->groups, $this->filteredRoster, $this->visibleRoster, $this->countSudah, $this->countBelum);
         session()->flash('status', 'Check-in manual dicatat.');
     }
 };
 ?>
 
 @php
-    $filled = $workSession->sessionDrivers()->count();
+    $filled = $this->allRoster->count();
     $quota = max((int) $workSession->quota, 1);
-    $hadir = $workSession->sessionDrivers()->whereNotNull('checked_in_at')->count();
+    $hadir = $this->countSudah;
     $percent = min(100, round(($filled / $quota) * 100));
     $totalFiltered = $this->filteredRoster->count();
     $shown = $this->visibleRoster->count();
     $remaining = max(0, $totalFiltered - $shown);
 @endphp
 
-<div style="display: flex; flex-direction: column; gap: 20px;" wire:poll.5s.visible>
+{{-- Poll berhenti saat admin lagi search/filter supaya input tidak terganggu --}}
+<div style="display: flex; flex-direction: column; gap: 20px;"
+     @if ($search === '' && $checkInFilter === 'semua') wire:poll.10s.visible @endif>
 
     {{-- ===== HEADER ===== --}}
     <div>
@@ -307,7 +307,7 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
 
         <div x-show="open" x-cloak x-transition.opacity.duration.200ms>
             <div class="space-y-4 p-5">
-                @foreach ($workSession->groups()->withCount('sessionDrivers')->get() as $group)
+                @foreach ($this->groups as $group)
                     <div wire:key="group-link-{{ $group->id }}">
                         <div class="flex flex-wrap items-center justify-between gap-2">
                             <h3 class="text-sm font-semibold text-slate-900">Registrasi {{ $group->name }}</h3>

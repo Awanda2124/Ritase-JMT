@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\TripReportStatus;
 use App\Models\SessionDriver;
 use App\Models\TripReport;
 use App\Models\WorkSession;
@@ -12,7 +13,8 @@ class DashboardController extends Controller
 {
     public function __invoke(SettingService $settings): View
     {
-        $today = now()->toDateString();
+        $startOfDay = now()->startOfDay();
+        $endOfDay = now()->endOfDay();
 
         // Sesi terbaru (bukan cuma hari ini) — biar dashboard tetep nampilin data
         // walau sesi terakhir udah lewat.
@@ -23,17 +25,22 @@ class DashboardController extends Controller
 
         $recentDrivers = collect();
         $reportCounts = collect();
+        $hadirCount = 0;
 
         if ($activeSession) {
+            // Semua supir di sesi ini (tabel di view yang di-scroll).
             $recentDrivers = SessionDriver::query()
                 ->where('work_session_id', $activeSession->id)
-                ->with('driver')
+                ->with('driver:id,name,ktp')
                 ->latest('registered_at')
-                ->limit(6)
                 ->get();
 
+            $hadirCount = $recentDrivers->whereNotNull('checked_in_at')->count();
+
+            // Ritase per supir = semua laporan kecuali yang di-void.
             $reportCounts = TripReport::query()
                 ->where('work_session_id', $activeSession->id)
+                ->where('status', '!=', TripReportStatus::Void->value)
                 ->selectRaw('driver_id, COUNT(*) as total')
                 ->groupBy('driver_id')
                 ->pluck('total', 'driver_id');
@@ -42,18 +49,18 @@ class DashboardController extends Controller
         return view('dashboard', [
             'ratePerTrip' => $settings->ratePerTrip(),
             'radiusMeters' => $settings->radiusMeters(),
-            'sessions' => WorkSession::query()
-                ->withCount('sessionDrivers')
-                ->latest('date')
-                ->limit(5)
-                ->get(),
             'totalSessions' => WorkSession::count(),
             'totalDrivers' => $activeSession ? $activeSession->session_drivers_count : 0,
             'activeSession' => $activeSession,
             'recentDrivers' => $recentDrivers,
             'reportCounts' => $reportCounts,
-            'todayCheckIns' => SessionDriver::query()->whereDate('checked_in_at', $today)->count(),
-            'todayReports' => TripReport::query()->whereDate('reported_at', $today)->count(),
+            'hadirCount' => $hadirCount,
+            'todayCheckIns' => SessionDriver::query()
+                ->whereBetween('checked_in_at', [$startOfDay, $endOfDay])
+                ->count(),
+            'todayReports' => TripReport::query()
+                ->whereBetween('reported_at', [$startOfDay, $endOfDay])
+                ->count(),
         ]);
     }
 }

@@ -90,17 +90,19 @@ class TripReportService
 
             $reportedAt = now();
 
-            foreach ($chassisLast4 as $chassis) {
-                TripReport::query()->create([
-                    'work_session_id' => $session->id,
-                    'driver_id' => $driverId,
-                    'chassis_last4' => $chassis,
-                    'status' => TripReportStatus::Menunggu,
-                    'lat' => $lat,
-                    'lng' => $lng,
-                    'reported_at' => $reportedAt,
-                ]);
-            }
+            // Satu INSERT untuk semua sasis (bukan N create + N activity log)
+            // supaya kunci baris roster cepat dilepas.
+            TripReport::query()->insert(array_map(fn (string $chassis): array => [
+                'work_session_id' => $session->id,
+                'driver_id' => $driverId,
+                'chassis_last4' => $chassis,
+                'status' => TripReportStatus::Menunggu->value,
+                'lat' => $lat,
+                'lng' => $lng,
+                'reported_at' => $reportedAt,
+                'created_at' => $reportedAt,
+                'updated_at' => $reportedAt,
+            ], $chassisLast4));
 
             return $count;
         }, 3);

@@ -22,8 +22,9 @@ class Driver extends Model
 
     public function getActivitylogOptions(): LogOptions
     {
+        // KTP sengaja tidak dicatat: nomor lengkap tidak boleh masuk activity_log.
         return LogOptions::defaults()
-            ->logFillable()
+            ->logOnly(['name'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }

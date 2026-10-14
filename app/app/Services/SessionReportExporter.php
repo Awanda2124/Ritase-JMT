@@ -19,6 +19,8 @@ class SessionReportExporter
 
     private const RUPIAH = '"Rp"#,##0';
 
+    private const CHECK = '✓';
+
     public function __construct(private readonly SessionReportBuilder $builder) {}
 
     public function filename(WorkSession $session): string
@@ -66,8 +68,10 @@ class SessionReportExporter
             $sheet->setCellValue([2, $row], $item['name']);
             $sheet->setCellValueExplicit([3, $row], $item['ktp'], DataType::TYPE_STRING);
 
-            foreach ($item['chassis'] as $i => $chassis) {
-                $sheet->setCellValueExplicit([4 + $i, $row], $chassis, DataType::TYPE_STRING);
+            // Satu centang per ritase yang sudah dicek (status cocok).
+            $trips = min((int) $item['count'], SessionReportBuilder::MAX_COLUMNS);
+            for ($i = 0; $i < $trips; $i++) {
+                $sheet->setCellValueExplicit([4 + $i, $row], self::CHECK, DataType::TYPE_STRING);
             }
 
             $sheet->setCellValue([11, $row], $item['cost']);
@@ -114,6 +118,7 @@ class SessionReportExporter
         if ($lastDataRow >= 5) {
             $sheet->getStyle("A5:A{$lastDataRow}")->applyFromArray($center);
             $sheet->getStyle("D5:J{$lastDataRow}")->applyFromArray($center);
+            $sheet->getStyle("D5:J{$lastDataRow}")->getFont()->setSize(12)->setBold(true);
             $sheet->getStyle("K5:K{$lastDataRow}")->getNumberFormat()->setFormatCode(self::RUPIAH);
         }
 

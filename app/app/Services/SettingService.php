@@ -4,14 +4,27 @@ namespace App\Services;
 
 use App\Models\Setting;
 use App\Support\SettingKey;
+use Illuminate\Support\Facades\Cache;
 
 class SettingService
 {
+    public const CACHE_KEY = 'settings.all';
+
+    /** @var array<string, ?string>|null memo per-request */
+    private ?array $loaded = null;
+
+    /** @return array<string, ?string> */
+    private function all(): array
+    {
+        return $this->loaded ??= Cache::rememberForever(
+            self::CACHE_KEY,
+            fn () => Setting::query()->pluck('value', 'key')->all(),
+        );
+    }
+
     public function get(string $key, ?string $default = null): ?string
     {
-        $value = Setting::query()->where('key', $key)->value('value');
-
-        return $value ?? $default;
+        return $this->all()[$key] ?? $default;
     }
 
     public function set(string $key, ?string $value): void
@@ -20,6 +33,14 @@ class SettingService
             ['key' => $key],
             ['value' => $value],
         );
+
+        $this->flush();
+    }
+
+    public function flush(): void
+    {
+        Cache::forget(self::CACHE_KEY);
+        $this->loaded = null;
     }
 
     public function ratePerTrip(): int

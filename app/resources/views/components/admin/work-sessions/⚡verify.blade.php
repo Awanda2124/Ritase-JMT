@@ -32,15 +32,6 @@ new #[Layout('layouts.app')] class extends Component {
     /** @var array<int, string> */
     public array $edits = [];
 
-    /**
-     * Auto-refresh 5 detik — TAPI hanya saat tidak ada form edit yang terbuka.
-     * Kalau admin sedang ngetik sasis di form "Ubah", poll di-pause biar input gak ke-reset.
-     */
-    protected function getPollingInterval(): ?string
-    {
-        return empty($this->edits) ? '5s' : null;
-    }
-
     public function mount(WorkSession $workSession): void
     {
         $this->workSession = $workSession;
@@ -69,6 +60,7 @@ new #[Layout('layouts.app')] class extends Component {
     public function reportsByDriver(): Collection
     {
         return TripReport::query()
+            ->select(['id', 'work_session_id', 'driver_id', 'chassis_last4', 'status', 'reported_at'])
             ->where('work_session_id', $this->workSession->id)
             ->orderBy('reported_at')
             ->orderBy('id')
@@ -243,7 +235,7 @@ new #[Layout('layouts.app')] class extends Component {
 };
 ?>
 
-<div class="space-y-5" wire:poll.5s.visible>
+<div class="space-y-5" wire:poll.10s.visible>
 
     {{-- ===== HEADER ===== --}}
     <div class="flex flex-wrap items-start justify-between gap-4">

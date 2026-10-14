@@ -42,6 +42,14 @@ class TripReport extends Model
         ];
     }
 
+    /**
+     * Pembuatan laporan tidak di-log (tabel ini sudah jadi catatannya);
+     * yang dicatat hanya perubahan oleh admin.
+     *
+     * @var list<string>
+     */
+    protected static $recordEvents = ['updated', 'deleted'];
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()

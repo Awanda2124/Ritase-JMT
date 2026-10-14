@@ -39,6 +39,14 @@ class SessionDriver extends Model
         ];
     }
 
+    /**
+     * Tanpa log otomatis: check-in manual dan hapus roster sudah dicatat
+     * manual di service, dan kolom checked_in_* sudah jadi catatan check-in sendiri.
+     *
+     * @var list<string>
+     */
+    protected static $recordEvents = [];
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
