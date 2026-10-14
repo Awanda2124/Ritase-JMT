@@ -7,98 +7,12 @@ use App\Exceptions\QuotaFullException;
 use App\Exceptions\SessionNotOpenException;
 use App\Models\Driver;
 use App\Models\SessionDriver;
+use App\Models\SessionGroup;
 use App\Models\User;
-use App\Models\WorkSession;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
-
-// class DriverRegistrationService
-// {
-//     public function register(WorkSession $session, string $name, string $ktp): SessionDriver
-//     {
-//         $this->ensureIsNotRateLimited();
-//         RateLimiter::hit($this->throttleKey(), 60);
-
-//         return DB::transaction(function () use ($session, $name, $ktp) {
-//             $lockedSession = WorkSession::query()
-//                 ->whereKey($session->id)
-//                 ->lockForUpdate()
-//                 ->firstOrFail();
-
-//             $registeredCount = SessionDriver::query()
-//                 ->where('work_session_id', $lockedSession->id)
-//                 ->count();
-
-//             if ($registeredCount >= $lockedSession->quota) {
-//                 throw new QuotaFullException;
-//             }
-
-//             $driver = Driver::query()
-//                 ->where('ktp', $ktp)
-//                 ->lockForUpdate()
-//                 ->first();
-
-//             if ($driver === null) {
-//                 $driver = Driver::query()->create([
-//                     'name' => $name,
-//                     'ktp' => $ktp,
-//                 ]);
-//             }
-
-//             $alreadyRegistered = SessionDriver::query()
-//                 ->where('work_session_id', $lockedSession->id)
-//                 ->where('driver_id', $driver->id)
-//                 ->exists();
-
-//             if ($alreadyRegistered) {
-//                 throw new AlreadyRegisteredException;
-//             }
-
-//             return SessionDriver::query()->create([
-//                 'work_session_id' => $lockedSession->id,
-//                 'driver_id' => $driver->id,
-//                 'registered_at' => now(),
-//             ]);
-//         });
-//     }
-
-//     public function removeFromRoster(SessionDriver $sessionDriver, User $admin): void
-//     {
-//         DB::transaction(function () use ($sessionDriver, $admin) {
-//             $sessionDriver->load(['driver', 'workSession']);
-
-//             activity()
-//                 ->causedBy($admin)
-//                 ->performedOn($sessionDriver->workSession)
-//                 ->withProperties([
-//                     'session_driver_id' => $sessionDriver->id,
-//                     'driver_id' => $sessionDriver->driver_id,
-//                     'driver_name' => $sessionDriver->driver?->name,
-//                     'ktp_masked' => $sessionDriver->driver?->maskedKtp(),
-//                 ])
-//                 ->log('Menghapus supir dari roster');
-
-//             $sessionDriver->delete();
-//         });
-//     }
-
-//     private function ensureIsNotRateLimited(): void
-//     {
-//         if (! RateLimiter::tooManyAttempts($this->throttleKey(), 10)) {
-//             return;
-//         }
-
-//         throw ValidationException::withMessages([
-//             'ktp' => 'Terlalu banyak percobaan. Coba lagi nanti.',
-//         ]);
-//     }
-
-//     private function throttleKey(): string
-//     {
-//         return 'register-driver:'.request()->ip();
-//     }
-// }
 
 class DriverRegistrationService
 {
@@ -108,28 +22,31 @@ class DriverRegistrationService
 
     private const DECAY_SECONDS = 60;
 
-    public function register(WorkSession $session, string $name, string $ktp): SessionDriver
+    public function register(SessionGroup $group, string $name, string $ktp): SessionDriver
     {
         $this->throttle($ktp);
 
         // 3 = percobaan ulang otomatis kalau MySQL membatalkan transaksi karena deadlock
-        return DB::transaction(function () use ($session, $name, $ktp) {
-            // Kunci baris sesi: semua pendaftar sesi yang sama antre di sini.
-            $lockedSession = WorkSession::query()
-                ->whereKey($session->id)
+        return DB::transaction(function () use ($group, $name, $ktp) {
+            // Kunci baris kelompok: pendaftar kelompok yang sama antre di sini,
+            // sedangkan kelompok lain tidak saling menunggu.
+            $lockedGroup = SessionGroup::query()
+                ->whereKey($group->id)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if (! $lockedSession->isOpen()) {
+            $session = $lockedGroup->workSession;
+
+            if (! $session->isOpen()) {
                 throw new SessionNotOpenException;
             }
 
             $driver = $this->findOrCreateDriver($name, $ktp);
 
-            // Cek "sudah terdaftar" sebelum kuota, supaya pesannya tepat
-            // untuk supir yang sudah masuk lalu klik daftar lagi.
+            // "Sudah terdaftar" dicek per SESI, jadi satu supir tidak bisa
+            // masuk dua kelompok sekaligus (misalnya Yayasan dan Akamsi).
             $alreadyRegistered = SessionDriver::query()
-                ->where('work_session_id', $lockedSession->id)
+                ->where('work_session_id', $session->id)
                 ->where('driver_id', $driver->id)
                 ->exists();
 
@@ -138,15 +55,16 @@ class DriverRegistrationService
             }
 
             $registeredCount = SessionDriver::query()
-                ->where('work_session_id', $lockedSession->id)
+                ->where('session_group_id', $lockedGroup->id)
                 ->count();
 
-            if ($registeredCount >= $lockedSession->quota) {
+            if ($registeredCount >= $lockedGroup->quota) {
                 throw new QuotaFullException; // exception = rollback, driver baru tidak tersimpan
             }
 
             return SessionDriver::query()->create([
-                'work_session_id' => $lockedSession->id,
+                'work_session_id' => $session->id,
+                'session_group_id' => $lockedGroup->id,
                 'driver_id' => $driver->id,
                 'registered_at' => now(),
             ]);
@@ -156,7 +74,7 @@ class DriverRegistrationService
     public function removeFromRoster(SessionDriver $sessionDriver, User $admin): void
     {
         DB::transaction(function () use ($sessionDriver, $admin) {
-            $sessionDriver->load(['driver', 'workSession']);
+            $sessionDriver->load(['driver', 'workSession', 'group']);
 
             activity()
                 ->causedBy($admin)
@@ -165,6 +83,7 @@ class DriverRegistrationService
                     'session_driver_id' => $sessionDriver->id,
                     'driver_id' => $sessionDriver->driver_id,
                     'driver_name' => $sessionDriver->driver?->name,
+                    'group_name' => $sessionDriver->group?->name,
                     'ktp_masked' => $sessionDriver->driver?->maskedKtp(),
                 ])
                 ->log('Menghapus supir dari roster');
@@ -178,7 +97,7 @@ class DriverRegistrationService
         try {
             return Driver::query()->firstOrCreate(['ktp' => $ktp], ['name' => $name]);
         } catch (UniqueConstraintViolationException) {
-            // Request lain di sesi berbeda baru saja membuat KTP yang sama.
+            // Request lain di kelompok berbeda baru saja membuat KTP yang sama.
             // Di MySQL transaksi tetap hidup setelah error ini, jadi aman dibaca ulang.
             return Driver::query()->where('ktp', $ktp)->firstOrFail();
         }

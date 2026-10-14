@@ -16,7 +16,7 @@ function deadlineData(array $overrides = []): array
         'route' => 'Langsiran IKT - JMT2',
         'open_time' => '06:00',
         'close_time' => '18:00',
-        'quota' => 50,
+        'groups' => [['id' => null, 'name' => 'Umum', 'quota' => 50]],
     ], $overrides);
 }
 
@@ -60,16 +60,19 @@ it('persists changed deadlines on update', function () {
     $admin = User::factory()->create();
     $service = app(WorkSessionService::class);
     $session = $service->create(deadlineData(), $admin);
+    $groupId = $session->groups()->first()->id;
 
     $service->update($session, deadlineData([
         'checkin_closes_at' => '2026-10-12T22:00',
         'report_closes_at' => '2026-10-13T07:00',
+        'groups' => [['id' => $groupId, 'name' => 'Umum', 'quota' => 50]],
     ]));
 
     $fresh = $session->fresh();
 
     expect($fresh->checkin_closes_at->format('Y-m-d H:i'))->toBe('2026-10-12 22:00')
-        ->and($fresh->report_closes_at->format('Y-m-d H:i'))->toBe('2026-10-13 07:00');
+        ->and($fresh->report_closes_at->format('Y-m-d H:i'))->toBe('2026-10-13 07:00')
+        ->and($session->groups()->count())->toBe(1);
 });
 
 it('lets an admin check a driver in manually from the roster page', function () {
@@ -78,9 +81,11 @@ it('lets an admin check a driver in manually from the roster page', function () 
     $admin->assignRole('admin');
 
     $session = WorkSession::factory()->create();
+    $group = groupFor($session);
     $driver = Driver::factory()->create();
     $sessionDriver = SessionDriver::query()->create([
         'work_session_id' => $session->id,
+        'session_group_id' => $group->id,
         'driver_id' => $driver->id,
         'registered_at' => now(),
     ]);

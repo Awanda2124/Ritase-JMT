@@ -23,7 +23,12 @@ class StoreWorkSessionRequest extends FormRequest
             'route' => ['required', 'string', 'max:255'],
             'open_time' => ['required', 'date_format:H:i'],
             'close_time' => ['required', 'date_format:H:i', 'after:open_time'],
-            'quota' => ['required', 'integer', 'min:1', 'max:1000'],
+            'checkin_closes_at' => ['nullable', 'date'],
+            'report_closes_at' => ['nullable', 'date'],
+            'groups' => ['required', 'array', 'min:1', 'max:10'],
+            'groups.*.id' => ['nullable', 'integer'],
+            'groups.*.name' => ['required', 'string', 'max:50'],
+            'groups.*.quota' => ['required', 'integer', 'min:1', 'max:1000'],
         ];
     }
 
@@ -38,8 +43,11 @@ class StoreWorkSessionRequest extends FormRequest
             'open_time.required' => 'Jam buka wajib diisi.',
             'close_time.required' => 'Jam tutup wajib diisi.',
             'close_time.after' => 'Jam tutup harus setelah jam buka.',
-            'quota.required' => 'Kuota wajib diisi.',
-            'quota.min' => 'Kuota minimal 1.',
+            'groups.required' => 'Minimal satu kelompok.',
+            'groups.min' => 'Minimal satu kelompok.',
+            'groups.*.name.required' => 'Nama kelompok wajib diisi.',
+            'groups.*.quota.required' => 'Kuota wajib diisi.',
+            'groups.*.quota.min' => 'Kuota minimal 1.',
         ];
     }
 

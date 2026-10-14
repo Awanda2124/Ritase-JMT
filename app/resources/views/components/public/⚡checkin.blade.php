@@ -182,7 +182,7 @@ new #[Layout('layouts.guest')] #[Title('Check-in')] class extends Component
 ?>
 
 <div
-    class="mx-auto flex min-h-screen w-full max-w-md items-start px-4 pt-8 pb-10"
+    class="w-full"
     x-data="{
         loading: false,
         clientError: '',
@@ -211,102 +211,125 @@ new #[Layout('layouts.guest')] #[Title('Check-in')] class extends Component
         }
     }"
 >
-    <div class="card w-full bg-base-100 shadow-sm border border-base-300">
-        <div class="card-body gap-4">
+    <div style="background: #fff; border: 1px solid #e2e8f0; border-radius: 20px; padding: 24px; box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.05);">
 
-            <h1 class="card-title text-2xl">Check-in</h1>
+        {{-- Header --}}
+        <div style="text-align: center;">
+            <div style="width: 56px; height: 56px; margin: 0 auto; display: flex; align-items: center; justify-content: center; border-radius: 16px; background: linear-gradient(135deg, #0f172a 0%, #334155 100%); color: #fff; box-shadow: 0 10px 20px -8px rgba(15, 23, 42, 0.4);">
+                <svg style="width: 26px; height: 26px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </div>
+            <h1 style="margin: 16px 0 0; font-size: 22px; font-weight: 700; color: #0f172a;">Check-in</h1>
+            <p style="margin: 4px 0 0; font-size: 14px; color: #64748b;">Konfirmasi kehadiran Anda di JMT.</p>
+        </div>
 
-            @if ($this->sessions->isEmpty())
-                <div role="alert" class="alert alert-warning">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" /></svg>
+        @if ($this->sessions->isEmpty())
+            <div style="margin-top: 24px; border: 1px solid #fcd34d; background: #fffbeb; border-radius: 14px; padding: 16px;">
+                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                    <svg style="width: 20px; height: 20px; flex-shrink: 0; color: #d97706; margin-top: 2px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+                    </svg>
                     <div>
-                        <h3 class="font-semibold">Belum ada sesi yang berjalan.</h3>
-                        <p class="text-sm">Coba lagi nanti atau hubungi admin.</p>
+                        <p style="margin: 0; font-size: 14px; font-weight: 700; color: #92400e;">Belum ada sesi yang berjalan</p>
+                        <p style="margin: 4px 0 0; font-size: 13px; color: #a16207;">Coba lagi nanti atau hubungi admin.</p>
                     </div>
                 </div>
-            @else
+            </div>
+        @else
 
-                {{-- ===== STEPPER (DaisyUI) ===== --}}
-                <ul class="steps w-full">
-                    <li class="step {{ $locationOk ? 'step-success' : 'step-primary' }}">Cek lokasi</li>
-                    <li class="step {{ $locationOk ? 'step-primary' : '' }}">Pilih nama</li>
-                </ul>
+            {{-- Stepper --}}
+            <div style="margin-top: 24px;">
+                <p style="margin: 0; text-align: center; font-size: 13px; font-weight: 600; color: #475569;">
+                    Langkah {{ $locationOk ? 2 : 1 }} dari 2:
+                    {{ $locationOk ? 'Pilih nama' : 'Cek lokasi' }}
+                </p>
+                <div style="margin-top: 8px; display: flex; gap: 8px;">
+                    <div style="height: 6px; flex: 1; border-radius: 9999px; background: #0f172a;"></div>
+                    <div style="height: 6px; flex: 1; border-radius: 9999px; background: {{ $locationOk ? '#0f172a' : '#e2e8f0' }};"></div>
+                </div>
+            </div>
 
-                <p class="text-sm text-base-content/70 text-center">
-                    Langkah {{ $locationOk ? 2 : 1 }} dari 2: {{ $locationOk ? 'Pilih nama' : 'Cek lokasi' }}
+            @if (! $locationOk)
+                {{-- ===== LANGKAH 1: CEK LOKASI ===== --}}
+                <p style="margin: 24px 0 0; font-size: 14px; line-height: 1.6; color: #334155;">
+                    Check-in hanya bisa dilakukan dari area JMT. Ketuk tombol di bawah lalu pilih
+                    <strong style="color: #0f172a;">Izinkan</strong> saat browser meminta akses lokasi.
                 </p>
 
-                @if (! $locationOk)
-                    {{-- ===== LANGKAH 1: CEK LOKASI ===== --}}
-                    <p class="text-base">
-                        Check-in hanya bisa dilakukan dari area JMT. Ketuk tombol di bawah lalu pilih
-                        <strong>Izinkan</strong> saat browser meminta akses lokasi.
-                    </p>
+                <button
+                    type="button"
+                    x-on:click="locate()"
+                    x-bind:disabled="loading"
+                    class="jmt-locate-btn"
+                    style="margin-top: 20px; display: flex; width: 100%; align-items: center; justify-content: center; border: 0; border-radius: 12px; background: #0f172a; padding: 14px; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer;"
+                >
+                    <span class="jmt-locate-text" style="display: inline-flex; align-items: center; gap: 8px;">
+                        <svg style="width: 18px; height: 18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+                        Cek lokasi saya
+                    </span>
+                    <span class="jmt-locate-loading" style="display: none; align-items: center; gap: 8px;">
+                        <svg style="width: 18px; height: 18px; animation: spin 0.8s linear infinite;" viewBox="0 0 24 24" fill="none">
+                            <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                            <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"/>
+                        </svg>
+                        Mencari lokasi... mohon tunggu
+                    </span>
+                </button>
 
-                    <button
-                        type="button"
-                        x-on:click="locate()"
-                        x-bind:disabled="loading"
-                        class="btn btn-neutral btn-lg w-full"
-                    >
-                        <span x-show="!loading" class="inline-flex items-center gap-2">
-                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.2 7-11.5A7 7 0 0 0 5 9.5C5 14.8 12 21 12 21Z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
-                            Cek lokasi saya
-                        </span>
-                        <span x-show="loading" x-cloak class="inline-flex items-center gap-2">
-                            <span class="loading loading-spinner loading-sm"></span>
-                            Mencari lokasi... mohon tunggu
-                        </span>
-                    </button>
-
-                    {{-- Error dari browser --}}
-                    <div x-show="clientError" x-cloak role="alert" class="alert alert-error">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                        <div class="w-full">
-                            <p class="font-semibold" x-text="clientError"></p>
-
-                            <details class="mt-3 text-sm">
-                                <summary class="cursor-pointer font-medium underline">Petunjuk mengaktifkan lokasi</summary>
-                                <div class="mt-2 space-y-1">
-                                    <p><strong>iPhone (Safari):</strong> Pengaturan → Privasi &amp; Keamanan → Layanan Lokasi → Safari → pilih "Saat Menggunakan".</p>
-                                    <p><strong>Android (Chrome):</strong> Ketuk ikon gembok di kolom alamat → Izin → Lokasi → Izinkan. Pastikan GPS menyala.</p>
+                {{-- Error dari browser --}}
+                <div x-show="clientError" x-cloak role="alert" style="margin-top: 16px; border: 1px solid #fecaca; background: #fef2f2; border-radius: 14px; padding: 16px;">
+                    <div style="display: flex; align-items: flex-start; gap: 12px;">
+                        <svg style="width: 20px; height: 20px; flex-shrink: 0; color: #dc2626; margin-top: 2px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+                        </svg>
+                        <div style="flex: 1;">
+                            <p style="margin: 0; font-size: 14px; font-weight: 600; color: #991b1b;" x-text="clientError"></p>
+                            <details style="margin-top: 12px; font-size: 13px; color: #7f1d1d;">
+                                <summary style="cursor: pointer; font-weight: 500; text-decoration: underline;">Petunjuk mengaktifkan lokasi</summary>
+                                <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+                                    <p style="margin: 0;"><strong>iPhone:</strong> Pengaturan → Privasi &amp; Keamanan → Layanan Lokasi → Safari → "Saat Menggunakan".</p>
+                                    <p style="margin: 0;"><strong>Android:</strong> Ketuk ikon gembok di kolom alamat → Izin → Lokasi → Izinkan.</p>
                                 </div>
                             </details>
-
-                            <button type="button" x-on:click="locate()" class="btn btn-sm btn-outline mt-3">
+                            <button type="button" x-on:click="locate()" style="margin-top: 12px; border: 1px solid #fca5a5; background: #fff; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: #991b1b; cursor: pointer;">
                                 Coba lagi
                             </button>
                         </div>
                     </div>
+                </div>
 
-                    {{-- Error dari server --}}
-                    @if ($locationError)
-                        <div role="alert" class="alert alert-error">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                            <div class="w-full">
-                                <p class="font-semibold">{{ $locationError }}</p>
-                                <button type="button" x-on:click="locate()" x-bind:disabled="loading" class="btn btn-sm btn-outline mt-3">
+                {{-- Error dari server --}}
+                @if ($locationError)
+                    <div role="alert" style="margin-top: 16px; border: 1px solid #fecaca; background: #fef2f2; border-radius: 14px; padding: 16px;">
+                        <div style="display: flex; align-items: flex-start; gap: 12px;">
+                            <svg style="width: 20px; height: 20px; flex-shrink: 0; color: #dc2626; margin-top: 2px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5.07 19h13.86c1.54 0 2.5-1.67 1.73-3L13.73 4c-.77-1.33-2.69-1.33-3.46 0L3.34 16c-.77 1.33.19 3 1.73 3z" />
+                            </svg>
+                            <div style="flex: 1;">
+                                <p style="margin: 0; font-size: 14px; font-weight: 600; color: #991b1b;">{{ $locationError }}</p>
+                                <button type="button" x-on:click="locate()" x-bind:disabled="loading" style="margin-top: 12px; border: 1px solid #fca5a5; background: #fff; border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: #991b1b; cursor: pointer;">
                                     Coba lagi
                                 </button>
                             </div>
                         </div>
-                    @endif
-                @else
-                    {{-- ===== LANGKAH 2: PILIH NAMA ===== --}}
-                    <div class="alert alert-success">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7" /></svg>
-                        <span class="font-semibold">Kamu di area JMT ✓</span>
-                        <button type="button" wire:click="resetLocation" class="btn btn-xs btn-ghost ml-auto">
-                            Cek ulang
-                        </button>
                     </div>
+                @endif
+            @else
+                {{-- ===== LANGKAH 2: PILIH NAMA ===== --}}
+                <div style="margin-top: 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #a7f3d0; background: #ecfdf5; border-radius: 12px; padding: 12px 16px;">
+                    <p style="margin: 0; font-size: 14px; font-weight: 600; color: #065f46;">✓ Kamu di area JMT</p>
+                    <button type="button" wire:click="resetLocation" style="border: 0; background: transparent; font-size: 13px; font-weight: 500; color: #065f46; text-decoration: underline; cursor: pointer;">
+                        Cek ulang
+                    </button>
+                </div>
 
+                <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 16px;">
                     @if ($this->sessions->count() > 1)
-                        <div class="form-control w-full">
-                            <label class="label" for="session">
-                                <span class="label-text font-medium">Sesi</span>
-                            </label>
-                            <select id="session" wire:model.live="workSessionId" class="select select-bordered w-full">
+                        <div>
+                            <label for="session" style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">Sesi</label>
+                            <select id="session" wire:model.live="workSessionId" style="display: block; width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; padding: 12px 14px; font-size: 15px; color: #0f172a;">
                                 <option value="">Pilih sesi</option>
                                 @foreach ($this->sessions as $session)
                                     <option value="{{ $session->id }}">{{ $session->date->translatedFormat('d M Y') }} · {{ $session->route }}</option>
@@ -316,98 +339,97 @@ new #[Layout('layouts.guest')] #[Title('Check-in')] class extends Component
                     @endif
 
                     @error('workSessionId')
-                        <div role="alert" class="alert alert-error">
-                            <span>{{ $message }}</span>
-                        </div>
+                        <div role="alert" style="border: 1px solid #fecaca; background: #fef2f2; border-radius: 10px; padding: 12px; font-size: 14px; color: #991b1b;">{{ $message }}</div>
                     @enderror
 
                     @if ($this->selected)
-                        {{-- Konfirmasi Nama Terpilih --}}
+                        {{-- Konfirmasi nama --}}
                         @php $sudah = (bool) $this->selected->checked_in_at; @endphp
-                        <form wire:submit="submit" class="space-y-4">
-                            <div class="card bg-base-200">
-                                <div class="card-body items-center text-center p-5">
-                                    @if ($sudah)
-                                        <p class="text-sm text-base-content/70">Kamu sudah check-in sebagai</p>
-                                        <p class="text-2xl font-bold">{{ $this->selected->driver?->name }}</p>
-                                        <div class="badge badge-success badge-outline mt-1">
-                                            ✓ Check-in pukul {{ $this->selected->checked_in_at->format('H:i') }}
-                                        </div>
-                                    @else
-                                        <p class="text-sm text-base-content/70">Check-in sebagai</p>
-                                        <p class="text-2xl font-bold">{{ $this->selected->driver?->name }}?</p>
-                                    @endif
+                        <form wire:submit="submit" style="display: flex; flex-direction: column; gap: 16px;">
+                            <div style="border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 14px; padding: 20px; text-align: center;">
+                                @if ($sudah)
+                                    <p style="margin: 0; font-size: 13px; color: #64748b;">Kamu sudah check-in sebagai</p>
+                                    <p style="margin: 6px 0 0; font-size: 20px; font-weight: 700; color: #0f172a;">{{ $this->selected->driver?->name }}</p>
+                                    <p style="margin: 8px 0 0; display: inline-block; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 9999px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: #047857;">
+                                        ✓ Check-in pukul {{ $this->selected->checked_in_at->format('H:i') }}
+                                    </p>
+                                @else
+                                    <p style="margin: 0; font-size: 13px; color: #64748b;">Check-in sebagai</p>
+                                    <p style="margin: 6px 0 0; font-size: 20px; font-weight: 700; color: #0f172a;">{{ $this->selected->driver?->name }}?</p>
+                                @endif
 
-                                    <button type="button" wire:click="clearDriver" class="btn btn-sm btn-ghost mt-2 underline">
-                                        Bukan saya
-                                    </button>
-                                </div>
+                                <button type="button" wire:click="clearDriver" style="margin-top: 12px; border: 0; background: transparent; font-size: 13px; color: #64748b; text-decoration: underline; cursor: pointer;">
+                                    Bukan saya
+                                </button>
                             </div>
 
                             @error('driverId')
-                                <div role="alert" class="alert alert-error">
-                                    <span>{{ $message }}</span>
-                                </div>
+                                <div role="alert" style="border: 1px solid #fecaca; background: #fef2f2; border-radius: 10px; padding: 12px; font-size: 14px; color: #991b1b;">{{ $message }}</div>
                             @enderror
 
                             <button
                                 type="submit"
                                 wire:loading.attr="disabled"
                                 wire:target="submit"
-                                class="btn btn-neutral btn-lg w-full"
+                                class="jmt-checkin-btn"
+                                style="display: flex; width: 100%; align-items: center; justify-content: center; border: 0; border-radius: 12px; background: #0f172a; padding: 14px; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer;"
                             >
-                                <span wire:loading.remove wire:target="submit">{{ $sudah ? 'Lanjut ke Lapor ritase' : 'Check-in' }}</span>
-                                <span wire:loading wire:target="submit" class="inline-flex items-center gap-2">
-                                    <span class="loading loading-spinner loading-sm"></span>
+                                <span class="jmt-checkin-text" style="display: inline-flex; align-items: center; gap: 8px;">
+                                    {{ $sudah ? 'Lanjut ke Lapor ritase' : 'Check-in' }}
+                                </span>
+                                <span class="jmt-checkin-loading" style="display: none; align-items: center; gap: 8px;">
+                                    <svg style="width: 18px; height: 18px; animation: spin 0.8s linear infinite;" viewBox="0 0 24 24" fill="none">
+                                        <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                        <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"/>
+                                    </svg>
                                     Memproses...
                                 </span>
                             </button>
                         </form>
                     @else
-                        {{-- Pencarian Nama (Search-as-you-type) --}}
-                        <div class="form-control w-full">
-                            <label class="label" for="search">
-                                <span class="label-text font-medium">Ketik nama kamu</span>
-                            </label>
+                        {{-- Search --}}
+                        <div>
+                            <label for="search" style="display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 6px;">Ketik nama kamu</label>
                             <input
                                 id="search"
                                 type="text"
                                 wire:model.live.debounce.300ms="search"
                                 autocomplete="off"
                                 autocapitalize="words"
-                                placeholder="Ketik nama kamu"
-                                class="input input-bordered w-full"
+                                placeholder="Contoh: Budi"
+                                style="display: block; width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; padding: 12px 14px; font-size: 15px; color: #0f172a; outline: none;"
                             />
 
-                            <div wire:loading wire:target="search" class="mt-2 flex items-center gap-2 text-sm text-base-content/60">
-                                <span class="loading loading-spinner loading-xs"></span>
+                            <div wire:loading wire:target="search" style="margin-top: 8px; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #64748b;">
+                                <svg style="width: 14px; height: 14px; animation: spin 0.8s linear infinite;" viewBox="0 0 24 24" fill="none">
+                                    <circle style="opacity: 0.25;" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                                    <path style="opacity: 0.75;" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"/>
+                                </svg>
                                 Mencari...
                             </div>
 
                             @error('driverId')
-                                <div role="alert" class="alert alert-error mt-3">
-                                    <span>{{ $message }}</span>
-                                </div>
+                                <div role="alert" style="margin-top: 12px; border: 1px solid #fecaca; background: #fef2f2; border-radius: 10px; padding: 12px; font-size: 14px; color: #991b1b;">{{ $message }}</div>
                             @enderror
 
                             @if (mb_strlen(trim($search)) < 2)
-                                <p class="mt-2 text-sm text-base-content/60">Ketik minimal 2 huruf untuk mencari nama.</p>
+                                <p style="margin: 8px 0 0; font-size: 13px; color: #64748b;">Ketik minimal 2 huruf untuk mencari nama.</p>
                             @elseif ($this->results->isEmpty())
-                                <div wire:loading.remove wire:target="search" class="alert alert-warning mt-3">
-                                    <span>Nama tidak ditemukan. Hubungi admin.</span>
-                                </div>
+                                <p wire:loading.remove wire:target="search" style="margin: 12px 0 0; border: 1px solid #fcd34d; background: #fffbeb; border-radius: 10px; padding: 12px; font-size: 14px; color: #92400e;">
+                                    Nama tidak ditemukan. Hubungi admin.
+                                </p>
                             @else
-                                <ul class="mt-3 space-y-2">
+                                <ul style="margin: 12px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px;">
                                     @foreach ($this->results as $row)
                                         <li wire:key="driver-{{ $row->driver_id }}">
                                             <button
                                                 type="button"
                                                 wire:click="selectDriver({{ $row->driver_id }})"
-                                                class="btn btn-outline w-full justify-between normal-case h-auto py-3"
+                                                style="display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 10px; padding: 14px 16px; text-align: left; cursor: pointer; font-size: 15px; color: #0f172a;"
                                             >
-                                                <span class="font-medium">{{ $row->driver?->name }}</span>
+                                                <span style="font-weight: 600;">{{ $row->driver?->name }}</span>
                                                 @if ($row->checked_in_at)
-                                                    <span class="badge badge-success badge-sm">✓ Sudah check-in</span>
+                                                    <span style="flex-shrink: 0; background: #ecfdf5; border-radius: 9999px; padding: 3px 10px; font-size: 11px; font-weight: 600; color: #047857;">✓ Sudah check-in</span>
                                                 @endif
                                             </button>
                                         </li>
@@ -416,9 +438,20 @@ new #[Layout('layouts.guest')] #[Title('Check-in')] class extends Component
                             @endif
                         </div>
                     @endif
-                @endif
+                </div>
             @endif
+        @endif
 
-        </div>
     </div>
 </div>
+
+<style>
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .jmt-locate-btn[disabled] .jmt-locate-text { display: none !important; }
+    .jmt-locate-btn[disabled] .jmt-locate-loading { display: inline-flex !important; }
+    .jmt-checkin-btn[disabled] .jmt-checkin-text { display: none !important; }
+    .jmt-checkin-btn[disabled] .jmt-checkin-loading { display: inline-flex !important; }
+</style>

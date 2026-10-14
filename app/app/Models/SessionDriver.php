@@ -16,6 +16,7 @@ class SessionDriver extends Model
 
     protected $fillable = [
         'work_session_id',
+        'session_group_id',
         'driver_id',
         'registered_at',
         'checked_in_at',
@@ -49,6 +50,11 @@ class SessionDriver extends Model
     public function workSession(): BelongsTo
     {
         return $this->belongsTo(WorkSession::class);
+    }
+
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(SessionGroup::class, 'session_group_id');
     }
 
     public function driver(): BelongsTo

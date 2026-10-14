@@ -4,6 +4,7 @@ namespace Database\Factories;
 
 use App\Models\Driver;
 use App\Models\SessionDriver;
+use App\Models\SessionGroup;
 use App\Models\WorkSession;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -23,5 +24,13 @@ class SessionDriverFactory extends Factory
             'registered_at' => now(),
             'note' => null,
         ];
+    }
+
+    public function forGroup(SessionGroup $group): static
+    {
+        return $this->state(fn () => [
+            'work_session_id' => $group->work_session_id,
+            'session_group_id' => $group->id,
+        ]);
     }
 }

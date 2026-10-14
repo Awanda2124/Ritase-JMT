@@ -2,6 +2,7 @@
 
 use App\Models\Driver;
 use App\Models\SessionDriver;
+use App\Models\SessionGroup;
 use App\Models\User;
 use App\Models\WorkSession;
 use App\Services\SettingService;
@@ -79,9 +80,16 @@ it('enforces unique driver per work session', function () {
     ]);
 })->throws(QueryException::class);
 
-it('enforces unique work session tokens', function () {
-    $token = str_repeat('a', 64);
+it('enforces unique session group tokens', function () {
+    $session = WorkSession::factory()->create();
+    $token = str_repeat('a', 40);
 
-    WorkSession::factory()->create(['token' => $token]);
-    WorkSession::factory()->create(['token' => $token]);
+    foreach (['Yayasan', 'Akamsi'] as $name) {
+        SessionGroup::query()->create([
+            'work_session_id' => $session->id,
+            'name' => $name,
+            'quota' => 10,
+            'token' => $token,
+        ]);
+    }
 })->throws(QueryException::class);

@@ -10,6 +10,7 @@ use App\Models\WorkSession;
 use App\Services\CheckInService;
 use App\Services\SettingService;
 use App\Support\SettingKey;
+use Livewire\Livewire;
 
 function checkInSetup(array $sessionOverrides = []): array
 {
@@ -19,10 +20,12 @@ function checkInSetup(array $sessionOverrides = []): array
     $settings->set(SettingKey::RADIUS_M, '50');
 
     $session = WorkSession::factory()->create($sessionOverrides);
+    $group = groupFor($session);
     $driver = Driver::factory()->create();
 
     $sessionDriver = SessionDriver::query()->create([
         'work_session_id' => $session->id,
+        'session_group_id' => $group->id,
         'driver_id' => $driver->id,
         'registered_at' => now(),
     ]);
@@ -93,6 +96,28 @@ it('shows the check-in page to guests', function () {
     checkInSetup();
 
     $this->get(route('public.checkin'))->assertOk();
+});
+
+it('shows drivers from every group of the session in one roster without a session picker', function () {
+    [$session] = checkInSetup();
+    $yayasan = groupFor($session, 5, 'Yayasan');
+    $akamsi = groupFor($session, 5, 'Akamsi');
+
+    foreach ([[$yayasan, 'Rudi Yayasan'], [$akamsi, 'Rudi Akamsi']] as [$group, $name]) {
+        SessionDriver::query()->create([
+            'work_session_id' => $session->id,
+            'session_group_id' => $group->id,
+            'driver_id' => Driver::factory()->create(['name' => $name])->id,
+            'registered_at' => now(),
+        ]);
+    }
+
+    Livewire::test('public.checkin')
+        ->call('setLocation', -6.105176, 106.959152)
+        ->set('search', 'rudi')
+        ->assertSet('workSessionId', $session->id)
+        ->assertSee('Rudi Yayasan')
+        ->assertSee('Rudi Akamsi');
 });
 
 it('sends guests without a check-in to the check-in page from the report page', function () {
