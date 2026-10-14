@@ -77,14 +77,7 @@ new #[Layout('layouts.app')] #[Title('Sesi kerja')] class extends Component
                 </svg>
             </div>
             <p class="mt-4 text-base font-semibold text-slate-900">Belum ada sesi kerja</p>
-            <p class="mt-1 text-sm text-slate-500">Buat sesi pertama untuk memulai registrasi supir.</p>
-            <a href="{{ route('work-sessions.create') }}"
-               class="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">
-                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-                </svg>
-                Buat sesi
-            </a>
+            <p class="mt-1 text-sm text-slate-500">Klik <strong class="text-slate-700">Buat sesi</strong> di pojok kanan atas untuk memulai.</p>
         </div>
     @else
         <div class="grid gap-4" style="grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));">

@@ -71,9 +71,9 @@ new #[Layout('layouts.guest')] #[Title('Registrasi supir')] class extends Compon
             <p style="margin: 4px 0 0; font-size: 14px; color: #64748b;">
                 {{ $workSession->route }} · {{ $workSession->date->translatedFormat('d M Y') }}
             </p>
-            <span style="margin-top: 8px; display: inline-block; background: #f1f5f9; border-radius: 9999px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: #475569;">
+            <!-- <span style="margin-top: 8px; display: inline-block; background: #f1f5f9; border-radius: 9999px; padding: 4px 12px; font-size: 12px; font-weight: 600; color: #475569;">
                 Kelompok {{ $group->name }}
-            </span>
+            </span> -->
         </div>
 
         @if ($registered)
@@ -111,7 +111,8 @@ new #[Layout('layouts.guest')] #[Title('Registrasi supir')] class extends Compon
         @elseif ($group->isFull())
             <div style="margin-top: 24px; border: 1px solid #fcd34d; background: #fffbeb; border-radius: 14px; padding: 20px; text-align: center;">
                 <p style="margin: 0; font-size: 16px; font-weight: 700; color: #92400e;">Kuota penuh</p>
-                <p style="margin: 6px 0 0; font-size: 13px; color: #a16207;">Kuota kelompok {{ $group->name }} sudah habis.</p>
+                <p style="margin: 6px 0 0; font-size: 13px; color: #a16207;">Kuota sudah habis.</p>
+                <!-- <p style="margin: 6px 0 0; font-size: 13px; color: #a16207;">Kuota kelompok {{ $group->name }} sudah habis.</p> -->
             </div>
         @else
             <div style="margin-top: 20px; display: flex; align-items: center; justify-content: center; gap: 6px;">
@@ -142,6 +143,9 @@ new #[Layout('layouts.guest')] #[Title('Registrasi supir')] class extends Compon
                         type="text"
                         inputmode="numeric"
                         maxlength="16"
+                        pattern="[0-9]*"
+                        autocomplete="off"
+                        oninput="this.value = this.value.replace(/\D/g, '')"
                         wire:model="ktp"
                         wire:loading.attr="disabled"
                         wire:target="submit"

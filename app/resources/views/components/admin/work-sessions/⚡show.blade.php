@@ -5,17 +5,101 @@ use App\Models\WorkSession;
 use App\Services\CheckInService;
 use App\Services\DriverRegistrationService;
 use App\Support\RoleName;
+use Livewire\Attributes\Computed;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 
 new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
 {
     public WorkSession $workSession;
 
+    #[Url(as: 'q')]
+    public string $search = '';
+
+    #[Url(as: 'ci')]
+    public string $checkInFilter = 'semua'; // semua | sudah | belum
+
+    public int $visibleCount = 10;
+
+    public int $perPage = 10;
+
+    /** Pause auto-refresh saat user lagi search/filter biar gak ganggu input. */
+    protected function getPollingInterval(): ?string
+    {
+        return (empty($this->search) && $this->checkInFilter === 'semua') ? '5s' : null;
+    }
+
     public function mount(WorkSession $workSession): void
     {
         $this->workSession = $workSession;
+    }
+
+    public function loadMore(): void
+    {
+        $this->visibleCount += $this->perPage;
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->visibleCount = $this->perPage;
+    }
+
+    public function updatedCheckInFilter(): void
+    {
+        $this->visibleCount = $this->perPage;
+    }
+
+    #[Computed]
+    public function allRoster(): \Illuminate\Support\Collection
+    {
+        return $this->workSession
+            ->sessionDrivers()
+            ->with(['driver', 'group'])
+            ->oldest('registered_at')
+            ->get();
+    }
+
+    #[Computed]
+    public function filteredRoster(): \Illuminate\Support\Collection
+    {
+        $needle = mb_strtolower(trim($this->search));
+        $checkIn = $this->checkInFilter;
+
+        return $this->allRoster
+            ->filter(function (SessionDriver $sd) use ($needle, $checkIn) {
+                // Filter nama
+                if ($needle !== '' && ! str_contains(mb_strtolower($sd->driver->name), $needle)) {
+                    return false;
+                }
+
+                // Filter check-in
+                return match ($checkIn) {
+                    'sudah' => $sd->checked_in_at !== null,
+                    'belum' => $sd->checked_in_at === null,
+                    default => true,
+                };
+            })
+            ->values();
+    }
+
+    #[Computed]
+    public function visibleRoster(): \Illuminate\Support\Collection
+    {
+        return $this->filteredRoster->take($this->visibleCount);
+    }
+
+    #[Computed]
+    public function countSudah(): int
+    {
+        return $this->allRoster->whereNotNull('checked_in_at')->count();
+    }
+
+    #[Computed]
+    public function countBelum(): int
+    {
+        return $this->allRoster->whereNull('checked_in_at')->count();
     }
 
     public function remove(int $sessionDriverId, DriverRegistrationService $registration): void
@@ -26,6 +110,7 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
 
         $registration->removeFromRoster($sessionDriver, auth()->user());
         $this->workSession->refresh();
+        unset($this->allRoster, $this->filteredRoster, $this->visibleRoster, $this->countSudah, $this->countBelum);
         session()->flash('status', 'Supir dihapus dari roster.');
     }
 
@@ -39,6 +124,7 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
 
         $checkIn->checkInManually($sessionDriver, auth()->user());
         $this->workSession->refresh();
+        unset($this->allRoster, $this->filteredRoster, $this->visibleRoster, $this->countSudah, $this->countBelum);
         session()->flash('status', 'Check-in manual dicatat.');
     }
 };
@@ -49,9 +135,13 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
     $quota = max((int) $workSession->quota, 1);
     $hadir = $workSession->sessionDrivers()->whereNotNull('checked_in_at')->count();
     $percent = min(100, round(($filled / $quota) * 100));
+    $totalFiltered = $this->filteredRoster->count();
+    $shown = $this->visibleRoster->count();
+    $remaining = max(0, $totalFiltered - $shown);
 @endphp
 
-<div style="display: flex; flex-direction: column; gap: 20px;">
+<div style="display: flex; flex-direction: column; gap: 20px;" wire:poll.5s.visible>
+
     {{-- ===== HEADER ===== --}}
     <div>
         <nav class="flex items-center gap-2 text-xs font-medium text-slate-500">
@@ -62,7 +152,13 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
 
         <div class="mt-3 flex flex-wrap items-start justify-between gap-4">
             <div class="min-w-0">
-                <h1 class="text-2xl font-bold text-slate-900 sm:text-3xl">{{ $workSession->route }}</h1>
+                <h1 class="flex flex-wrap items-center gap-2 text-2xl font-bold text-slate-900 sm:text-3xl">
+                    {{ $workSession->route }}
+                    <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #10b981; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 9999px;">
+                        <span style="width: 6px; height: 6px; border-radius: 9999px; background: #10b981; animation: pulse 2s infinite;"></span>
+                        Live
+                    </span>
+                </h1>
                 <p class="mt-1 text-sm text-slate-500">
                     {{ $workSession->date->translatedFormat('d M Y') }}
                     · registrasi {{ $workSession->opens_at->format('H:i') }}–{{ $workSession->closes_at->format('H:i') }}
@@ -94,6 +190,13 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
         </div>
     </div>
 
+    <style>
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+    </style>
+
     @if (session('status'))
         <div class="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
             <svg class="h-5 w-5 shrink-0 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -103,84 +206,74 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
         </div>
     @endif
 
-    {{-- ===== STAT CARDS (pakai inline CSS grid, anti-gagal) ===== --}}
-    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
-        <style>
-            @media (min-width: 1024px) {
-                .jmt-stat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
-            }
-        </style>
-        <div class="jmt-stat-grid" style="display: contents;">
+    {{-- ===== STAT CARDS ===== --}}
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;">
 
-            {{-- Terdaftar --}}
-            <div style="border: 1px solid #e2e8f0; background: #fff; border-radius: 16px; padding: 14px; box-shadow: 0 1px 2px rgba(15,23,42,.05);">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #dbeafe; color: #2563eb;">
-                        <svg style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                    </div>
-                    <p style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin: 0;">Terdaftar</p>
-                </div>
-                <p style="margin: 10px 0 0; font-size: 20px; font-weight: 700; color: #0f172a;">
-                    {{ $filled }}<span style="margin-left: 4px; font-size: 13px; font-weight: 600; color: #94a3b8;">/ {{ $quota }}</span>
+        <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
+            <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #dbeafe; color: #2563eb;">
+                <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+            </span>
+            <div style="min-width: 0; overflow: hidden;">
+                <p style="margin: 0; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Terdaftar</p>
+                <p style="margin: 0; font-size: 16px; font-weight: 700; line-height: 1.1; color: #0f172a;">
+                    {{ $filled }}<span style="margin-left: 4px; font-size: 12px; font-weight: 600; color: #94a3b8;">/ {{ $quota }}</span>
                 </p>
-                <div style="margin-top: 8px; height: 4px; overflow: hidden; border-radius: 9999px; background: #f1f5f9;">
-                    <div style="height: 100%; border-radius: 9999px; background: #3b82f6; width: {{ $percent }}%;"></div>
-                </div>
             </div>
+        </div>
 
-            {{-- Hadir --}}
-            <div style="border: 1px solid #e2e8f0; background: #fff; border-radius: 16px; padding: 14px; box-shadow: 0 1px 2px rgba(15,23,42,.05);">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #d1fae5; color: #059669;">
-                        <svg style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                    </div>
-                    <p style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin: 0;">Hadir</p>
-                </div>
-                <p style="margin: 10px 0 0; font-size: 20px; font-weight: 700; color: #0f172a;">{{ $hadir }}</p>
-                <p style="margin: 2px 0 0; font-size: 11px; color: #64748b;">Check-in di JMT</p>
+        <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
+            <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #d1fae5; color: #059669;">
+                <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+            </span>
+            <div style="min-width: 0; overflow: hidden;">
+                <p style="margin: 0; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Hadir</p>
+                <p style="margin: 0; font-size: 16px; font-weight: 700; line-height: 1.1; color: #0f172a;">{{ $hadir }}</p>
             </div>
+        </div>
 
-            {{-- Batas check-in --}}
-            <div style="border: 1px solid #e2e8f0; background: #fff; border-radius: 16px; padding: 14px; box-shadow: 0 1px 2px rgba(15,23,42,.05);">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #fef3c7; color: #d97706;">
-                        <svg style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                    </div>
-                    <p style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin: 0;">Batas check-in</p>
-                </div>
-                <p style="margin: 10px 0 0; font-size: 14px; font-weight: 700; color: #0f172a;">
+        <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
+            <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #fef3c7; color: #d97706;">
+                <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </span>
+            <div style="min-width: 0; overflow: hidden;">
+                <p style="margin: 0; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Batas check-in</p>
+                <p style="margin: 0; font-size: 13px; font-weight: 700; line-height: 1.2; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                     {{ $workSession->checkInDeadline()?->translatedFormat('d M, H:i') ?? '-' }}
                 </p>
             </div>
+        </div>
 
-            {{-- Batas lapor --}}
-            <div style="border: 1px solid #e2e8f0; background: #fff; border-radius: 16px; padding: 14px; box-shadow: 0 1px 2px rgba(15,23,42,.05);">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <div style="width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: #ede9fe; color: #7c3aed;">
-                        <svg style="width: 16px; height: 16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                    </div>
-                    <p style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin: 0;">Batas lapor</p>
-                </div>
-                <p style="margin: 10px 0 0; font-size: 14px; font-weight: 700; color: #0f172a;">
+        <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
+            <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #ede9fe; color: #7c3aed;">
+                <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </span>
+            <div style="min-width: 0; overflow: hidden;">
+                <p style="margin: 0; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Batas lapor</p>
+                <p style="margin: 0; font-size: 13px; font-weight: 700; line-height: 1.2; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                     {{ $workSession->reportDeadline()?->translatedFormat('d M, H:i') ?? '-' }}
                 </p>
             </div>
-
         </div>
+
     </div>
 
-    {{-- ===== LINK PUBLIK ===== --}}
+    {{-- ===== LINK PUBLIK (collapsible) ===== --}}
     <div
         class="rounded-2xl border border-slate-200 bg-white shadow-sm"
         x-data="{
+            open: localStorage.getItem('jmt-links-open') !== '0',
+            toggle() {
+                this.open = !this.open;
+                localStorage.setItem('jmt-links-open', this.open ? '1' : '0');
+            },
             copiedKey: null,
             async copy(key, text) {
                 try {
@@ -200,52 +293,61 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             }
         }"
     >
-        <div class="border-b border-slate-100 px-5 py-4">
-            <h2 class="text-sm font-semibold text-slate-900">Link publik</h2>
-            <p class="text-xs text-slate-500">Bagikan ke supir untuk registrasi dan check-in.</p>
-        </div>
+        <button type="button" x-on:click="toggle()"
+                class="flex w-full items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 text-left transition-colors hover:bg-slate-50"
+                x-bind:class="!open && 'border-b-0'">
+            <div class="min-w-0">
+                <h2 class="text-sm font-semibold text-slate-900">Link publik</h2>
+                <p class="text-xs text-slate-500">Bagikan ke supir untuk registrasi dan check-in.</p>
+            </div>
+            <svg class="h-4 w-4 shrink-0 text-slate-400 transition-transform" x-bind:class="open ? 'rotate-180' : ''" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+        </button>
 
-        <div style="display: flex; flex-direction: column; gap: 20px; padding: 20px;">
-            @foreach ($workSession->groups()->withCount('sessionDrivers')->get() as $group)
-                <div wire:key="group-link-{{ $group->id }}">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <h3 class="text-sm font-semibold text-slate-900">Registrasi {{ $group->name }}</h3>
-                        <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
-                            {{ $group->session_drivers_count }}/{{ $group->quota }}
-                        </span>
+        <div x-show="open" x-cloak x-transition.opacity.duration.200ms>
+            <div class="space-y-4 p-5">
+                @foreach ($workSession->groups()->withCount('sessionDrivers')->get() as $group)
+                    <div wire:key="group-link-{{ $group->id }}">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h3 class="text-sm font-semibold text-slate-900">Registrasi {{ $group->name }}</h3>
+                            <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                                {{ $group->session_drivers_count }}/{{ $group->quota }}
+                            </span>
+                        </div>
+                        <div class="mt-2 flex items-stretch gap-2">
+                            <p class="min-w-0 flex-1 truncate rounded-lg bg-slate-50 px-3 py-2.5 font-mono text-xs text-slate-600">{{ $group->registrationUrl() }}</p>
+                            <button type="button" x-on:click="copy('group-{{ $group->id }}', '{{ $group->registrationUrl() }}')"
+                                    class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-900 hover:text-white hover:border-slate-900">
+                                <svg x-show="copiedKey !== 'group-{{ $group->id }}'" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                <svg x-show="copiedKey === 'group-{{ $group->id }}'" x-cloak class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                                <span x-show="copiedKey !== 'group-{{ $group->id }}'">Salin</span>
+                                <span x-show="copiedKey === 'group-{{ $group->id }}'" x-cloak>Tersalin</span>
+                            </button>
+                        </div>
                     </div>
+                @endforeach
+
+                <div class="border-t border-slate-100 pt-4">
+                    <h3 class="text-sm font-semibold text-slate-900">Check-in (semua kelompok)</h3>
                     <div class="mt-2 flex items-stretch gap-2">
-                        <p class="min-w-0 flex-1 truncate rounded-lg bg-slate-50 px-3 py-2.5 font-mono text-xs text-slate-600">{{ $group->registrationUrl() }}</p>
-                        <button type="button" x-on:click="copy('group-{{ $group->id }}', '{{ $group->registrationUrl() }}')"
+                        <p class="min-w-0 flex-1 truncate rounded-lg bg-slate-50 px-3 py-2.5 font-mono text-xs text-slate-600">{{ route('public.checkin') }}</p>
+                        <button type="button" x-on:click="copy('checkin', '{{ route('public.checkin') }}')"
                                 class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-900 hover:text-white hover:border-slate-900">
-                            <svg x-show="copiedKey !== 'group-{{ $group->id }}'" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                            <svg x-show="copiedKey !== 'checkin'" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
-                            <svg x-show="copiedKey === 'group-{{ $group->id }}'" x-cloak class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <svg x-show="copiedKey === 'checkin'" x-cloak class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
                             </svg>
-                            <span x-show="copiedKey !== 'group-{{ $group->id }}'">Salin</span>
-                            <span x-show="copiedKey === 'group-{{ $group->id }}'" x-cloak>Tersalin</span>
+                            <span x-show="copiedKey !== 'checkin'">Salin</span>
+                            <span x-show="copiedKey === 'checkin'" x-cloak>Tersalin</span>
                         </button>
                     </div>
-                </div>
-            @endforeach
-
-            <div class="border-t border-slate-100 pt-4">
-                <h3 class="text-sm font-semibold text-slate-900">Check-in (semua kelompok)</h3>
-                <div class="mt-2 flex items-stretch gap-2">
-                    <p class="min-w-0 flex-1 truncate rounded-lg bg-slate-50 px-3 py-2.5 font-mono text-xs text-slate-600">{{ route('public.checkin') }}</p>
-                    <button type="button" x-on:click="copy('checkin', '{{ route('public.checkin') }}')"
-                            class="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-900 hover:text-white hover:border-slate-900">
-                        <svg x-show="copiedKey !== 'checkin'" class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                        <svg x-show="copiedKey === 'checkin'" x-cloak class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                        <span x-show="copiedKey !== 'checkin'">Salin</span>
-                        <span x-show="copiedKey === 'checkin'" x-cloak>Tersalin</span>
-                    </button>
                 </div>
             </div>
         </div>
@@ -253,16 +355,58 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
 
     {{-- ===== ROSTER ===== --}}
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div class="border-b border-slate-100 px-5 py-4">
-            <h2 class="text-sm font-semibold text-slate-900">Roster supir</h2>
-            <p class="text-xs text-slate-500">Semua supir yang terdaftar di sesi ini.</p>
+
+        {{-- Header --}}
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+            <div>
+                <h2 class="text-sm font-semibold text-slate-900">Roster supir</h2>
+                <p class="text-xs text-slate-500">Diurutkan dari yang paling awal mendaftar.</p>
+            </div>
+
+            {{-- Search --}}
+            <div style="position: relative; min-width: 220px;">
+                <svg style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: #94a3b8; pointer-events: none;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+                </svg>
+                <input type="text" wire:model.live.debounce.300ms="search" placeholder="Cari nama supir..."
+                       style="display: block; width: 100%; box-sizing: border-box; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; padding: 8px 12px 8px 36px; font-size: 13px; color: #0f172a; outline: none;">
+            </div>
+        </div>
+
+        {{-- Filter tabs --}}
+        <div style="padding: 12px 20px; border-bottom: 1px solid #f1f5f9; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between;">
+            <div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: #f1f5f9; border-radius: 12px;">
+                @php
+                    $ciFilters = [
+                        'semua' => ['Semua', $filled],
+                        'sudah' => ['Sudah check-in', $this->countSudah],
+                        'belum' => ['Belum check-in', $this->countBelum],
+                    ];
+                @endphp
+                @foreach ($ciFilters as $key => [$label, $count])
+                    <button type="button" wire:click="$set('checkInFilter', '{{ $key }}')"
+                            style="display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+                                   {{ $checkInFilter === $key ? 'background: #ffffff; color: #0f172a; box-shadow: 0 1px 2px rgba(15,23,42,.08);' : 'background: transparent; color: #475569;' }}">
+                        {{ $label }}
+                        <span style="border-radius: 9999px; background: {{ $checkInFilter === $key ? '#e2e8f0' : '#cbd5e1' }}; padding: 1px 6px; font-size: 10px; color: #334155;">{{ $count }}</span>
+                    </button>
+                @endforeach
+            </div>
+
+            <span style="font-size: 12px; font-weight: 500; color: #64748b;">
+                Menampilkan <strong style="color: #0f172a;">{{ $shown }}</strong> dari <strong style="color: #0f172a;">{{ $totalFiltered }}</strong> supir
+                @if ($remaining > 0)
+                    <span style="color: #94a3b8;">&middot; {{ $remaining }} belum tampil</span>
+                @endif
+            </span>
         </div>
 
         <div class="overflow-x-auto">
             <table class="min-w-full text-left text-sm">
                 <thead class="border-b border-slate-100 bg-slate-50/50">
                     <tr>
-                        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Nama</th>
+                        <th class="px-5 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">#</th>
+                        <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Nama</th>
                         <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Kelompok</th>
                         <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">KTP</th>
                         <th class="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Daftar</th>
@@ -271,10 +415,14 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                    @forelse ($workSession->sessionDrivers()->with(['driver', 'group'])->latest('registered_at')->get() as $roster)
+                    @forelse ($this->visibleRoster as $i => $roster)
                         <tr wire:key="roster-{{ $roster->id }}" class="transition-colors hover:bg-slate-50/70">
 
-                            <td class="px-5 py-3.5">
+                            <td class="px-5 py-3.5 text-xs font-semibold text-slate-400">
+                                {{ $i + 1 }}
+                            </td>
+
+                            <td class="px-4 py-3.5">
                                 <span class="font-semibold text-slate-900">{{ $roster->driver->name }}</span>
                             </td>
 
@@ -338,20 +486,52 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="6" class="px-5 py-16 text-center">
+                            <td colspan="7" class="px-5 py-16 text-center">
                                 <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
                                     <svg class="h-7 w-7 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                                     </svg>
                                 </div>
-                                <p class="mt-3 text-sm font-semibold text-slate-700">Belum ada supir terdaftar</p>
-                                <p class="mt-1 text-xs text-slate-500">Bagikan link registrasi di atas untuk memulai.</p>
+                                <p class="mt-3 text-sm font-semibold text-slate-700">
+                                    @if ($search !== '')
+                                        Tidak ada supir yang cocok dengan "{{ $search }}"
+                                    @elseif ($checkInFilter === 'sudah')
+                                        Belum ada supir yang check-in
+                                    @elseif ($checkInFilter === 'belum')
+                                        Semua supir sudah check-in
+                                    @else
+                                        Belum ada supir terdaftar
+                                    @endif
+                                </p>
+                                <p class="mt-1 text-xs text-slate-500">
+                                    @if ($search === '' && $checkInFilter === 'semua')
+                                        Bagikan link registrasi di atas untuk memulai.
+                                    @endif
+                                </p>
                             </td>
                         </tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
+
+        {{-- Load More --}}
+        @if ($remaining > 0)
+            <div class="border-t border-slate-100 bg-slate-50/50 p-4 text-center">
+                <button type="button" wire:click="loadMore" wire:loading.attr="disabled" wire:target="loadMore"
+                        class="inline-flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-6 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:border-slate-900 hover:bg-slate-50 disabled:opacity-60">
+                    <svg wire:loading.remove wire:target="loadMore" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                    <svg wire:loading wire:target="loadMore" class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"/>
+                    </svg>
+                    Muat {{ min($perPage, $remaining) }} supir lagi
+                    <span class="text-slate-400">({{ $remaining }} tersisa)</span>
+                </button>
+            </div>
+        @endif
     </div>
 
 </div>

@@ -214,7 +214,7 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
                         <circle cx="12" cy="9.5" r="2.5"/>
                     </svg>
                 </div>
-                <p style="margin: 16px 0 0; font-size: 14px; line-height: 1.5; color: #475569;">Memeriksa lokasi Anda. Lapor hanya bisa dari area JMT.</p>
+                <p style="margin: 16px 0 0; font-size: 14px; line-height: 1.5; color: #475569;">Memverifikasi lokasi Anda. Lapor ritase harus dilakukan dari area JMT</p>
             </div>
 
             <button type="button" x-on:click="locate()" x-bind:disabled="loading" class="jmt-locate-btn"
@@ -255,7 +255,11 @@ new #[Layout('layouts.guest')] #[Title('Lapor ritase')] class extends Component
                     <div style="display: flex; flex-direction: column; gap: 8px;">
                         @foreach ($chassis as $i => $value)
                             <div wire:key="chassis-{{ $i }}" style="display: flex; gap: 8px;">
-                                <input type="text" inputmode="numeric" maxlength="4" wire:model="chassis.{{ $i }}" placeholder="0000"
+                                <input type="text" inputmode="numeric" maxlength="4"
+                                       name="chassis[]"
+                                       id="chassis-{{ $i }}"
+                                       aria-label="Sasis 4 digit"
+                                       wire:model="chassis.{{ $i }}" placeholder="0000"
                                        style="display: block; width: 100%; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 12px; background: #fff; padding: 12px 14px; text-align: center; font-family: 'Courier New', monospace; font-size: 20px; font-weight: 700; letter-spacing: 0.2em; color: #0f172a; outline: none;">
                                 @if (count($chassis) > 1)
                                     <button type="button" wire:click="removeChassis({{ $i }})"
