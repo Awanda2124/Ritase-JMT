@@ -19,7 +19,7 @@ class AdminUserService
             $user = User::query()->create([
                 'name' => $data['name'],
                 'email' => $data['email'],
-                'password' => $data['password'], // di-hash otomatis oleh cast model
+                'password' => $data['password'],
             ]);
 
             $user->assignRole(RoleName::ADMIN);
@@ -31,6 +31,33 @@ class AdminUserService
                 ->log('Menambah admin');
 
             return $user;
+        });
+    }
+
+    /**
+     * Update data admin. Password hanya diubah kalau diisi.
+     *
+     * @param  array{name: string, email: string, password?: ?string}  $data
+     */
+    public function update(User $target, array $data, User $actor): User
+    {
+        return DB::transaction(function () use ($target, $data, $actor): User {
+            $target->name = $data['name'];
+            $target->email = $data['email'];
+
+            if (! empty($data['password'])) {
+                $target->password = $data['password'];
+            }
+
+            $target->save();
+
+            activity()
+                ->causedBy($actor)
+                ->performedOn($target)
+                ->withProperties(['name' => $target->name, 'email' => $target->email])
+                ->log('Mengubah admin');
+
+            return $target;
         });
     }
 
