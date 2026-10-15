@@ -29,6 +29,9 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
 
     public int $perPage = 10;
 
+    /** @var array<int, bool> id SessionDriver yang KTP lengkapnya sedang dibuka */
+    public array $revealedKtp = [];
+
     /** Pause auto-refresh saat user lagi search/filter biar gak ganggu input. */
     protected function getPollingInterval(): ?string
     {
@@ -37,6 +40,34 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             || $this->groupFilter !== 'semua';
 
         return $isFiltering ? null : '5s';
+    }
+
+    /**
+     * Buka/tutup KTP lengkap. Nomor lengkap baru dirender server setelah klik,
+     * dan setiap pembukaan dicatat di activity log (tanpa menyimpan nomornya).
+     */
+    public function toggleKtp(int $sessionDriverId): void
+    {
+        abort_unless(auth()->user()?->hasRole(RoleName::ADMIN), 403);
+
+        if (isset($this->revealedKtp[$sessionDriverId])) {
+            unset($this->revealedKtp[$sessionDriverId]);
+
+            return;
+        }
+
+        $sessionDriver = SessionDriver::query()
+            ->with('driver:id,name')
+            ->where('work_session_id', $this->workSession->id)
+            ->findOrFail($sessionDriverId);
+
+        activity()
+            ->causedBy(auth()->user())
+            ->performedOn($sessionDriver->driver)
+            ->withProperties(['work_session_id' => $this->workSession->id, 'driver' => $sessionDriver->driver->name])
+            ->log('Melihat KTP lengkap');
+
+        $this->revealedKtp[$sessionDriverId] = true;
     }
 
     public function mount(WorkSession $workSession): void
@@ -496,12 +527,26 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                             </td>
 
                             <td class="px-4 py-3.5">
-                                <div class="relative inline-block" x-data="{ show: false }"
-                                     x-on:mouseenter="show = true" x-on:mouseleave="show = false" x-on:click="show = !show">
-                                    <span class="cursor-pointer select-none font-mono text-xs text-slate-500 transition-colors hover:text-slate-900">
-                                        <span x-show="!show">{{ $roster->driver->maskedKtp() }}</span>
-                                        <span x-show="show" x-cloak>{{ $roster->driver->ktp }}</span>
-                                    </span>
+                                <div class="inline-flex items-center gap-2 font-mono text-xs text-slate-500">
+                                    @if (isset($revealedKtp[$roster->id]))
+                                        <span>{{ $roster->driver->ktp }}</span>
+                                    @else
+                                        <span>{{ $roster->driver->maskedKtp() }}</span>
+                                    @endif
+                                    <button type="button" wire:click="toggleKtp({{ $roster->id }})" wire:loading.attr="disabled" wire:target="toggleKtp({{ $roster->id }})"
+                                            @if (isset($revealedKtp[$roster->id])) title="Sembunyikan KTP" aria-label="Sembunyikan KTP" @else title="Lihat KTP lengkap" aria-label="Lihat KTP lengkap" @endif
+                                            class="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50">
+                                        @if (isset($revealedKtp[$roster->id]))
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                            </svg>
+                                        @else
+                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                        @endif
+                                    </button>
                                 </div>
                             </td>
 

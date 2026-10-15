@@ -58,7 +58,7 @@ it('shows the receipt with both copies to an admin', function () {
         ->assertSee('1001')
         ->assertSee('1002')
         ->assertSee('Rp 120.000')
-        ->assertDontSee('CETAK ULANG');
+        ->assertDontSee('( cetak ulang )');
 });
 
 it('defaults to 80 mm paper and accepts 58 mm and a4', function () {
@@ -107,7 +107,7 @@ it('records a print and labels later copies as cetak ulang', function () {
     $this->actingAs($admin)
         ->get(route('receipts.print', [$session, $receipt]))
         ->assertOk()
-        ->assertSee('CETAK ULANG');
+        ->assertSee('( cetak ulang )');
 });
 
 it('marks a voided receipt as not valid and refuses printing it', function () {

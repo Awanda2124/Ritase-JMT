@@ -9,6 +9,11 @@
         :root { --lebar: 72mm; }
         body.paper-58 { --lebar: 48mm; }
         body.paper-a4 { --lebar: 120mm; }
+        body.paper-58 { font-size: 10px; }
+        body.paper-58 .copy { padding: 3mm 1.5mm; }
+        body.paper-58 .besar { font-size: 13px; }
+        body.paper-58 .baris span:first-child { white-space: nowrap; }
+        body.paper-58 .potong, body.paper-58 .ttd > div { font-size: 9px; }
         * { box-sizing: border-box; }
         body { margin: 0; background: #e2e8f0; color: #000; font-family: "Courier New", Courier, monospace; font-size: 12px; line-height: 1.4; }
         .toolbar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; background: #0f172a; color: #fff; font-family: system-ui, sans-serif; font-size: 13px; }
@@ -95,7 +100,7 @@
         </div>
         <hr>
         @if ($reprint)
-            <div class="tanda">*** CETAK ULANG ***</div>
+            <div class="tengah" style="font-size:10px;">( cetak ulang )</div>
         @endif
         <div class="tengah tebal">{{ $label }}</div>
         @if (! $loop->last)

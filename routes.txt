@@ -1,0 +1,80 @@
+﻿
+  GET|HEAD  / ......................................................................................... routes/web.php:11
+            Γçé web
+  GET|HEAD  checkin ....................................... public.checkin ΓÇ║ Livewire\Mechanisms ΓÇ║ LivewirePageController
+            Γçé web
+  GET|HEAD  daftar/{token} ............................... public.register ΓÇ║ Livewire\Mechanisms ΓÇ║ LivewirePageController
+            Γçé web
+  GET|HEAD  dashboard ................................................................... dashboard ΓÇ║ DashboardController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  GET|HEAD  lapor .......................................... public.report ΓÇ║ Livewire\Mechanisms ΓÇ║ LivewirePageController
+            Γçé web
+  GET|HEAD  livewire-ebd836da/css/{component}.css vendor/livewire/livewire/src/Features/SupportCssModules/SupportCssModules.php:15
+  GET|HEAD  livewire-ebd836da/css/{component}.global.css vendor/livewire/livewire/src/Features/SupportCssModules/SupportCssModules.php:48
+  GET|HEAD  livewire-ebd836da/js/{component}.js vendor/livewire/livewire/src/Features/SupportJsModules/SupportJsModules.php:23
+  GET|HEAD  livewire-ebd836da/livewire.csp.min.js.map ...................... Livewire\Mechanisms ΓÇ║ FrontendAssets@cspMaps
+  GET|HEAD  livewire-ebd836da/livewire.min.js ............... Livewire\Mechanisms ΓÇ║ FrontendAssets@returnJavaScriptAsFile
+  GET|HEAD  livewire-ebd836da/livewire.min.js.map ............................. Livewire\Mechanisms ΓÇ║ FrontendAssets@maps
+  GET|HEAD  livewire-ebd836da/preview-file/{filename} livewire.preview-file ΓÇ║ Livewire\Features ΓÇ║ FilePreviewController@handle
+            Γçé web
+  POST      livewire-ebd836da/update ........ default-livewire.update ΓÇ║ Livewire\Mechanisms ΓÇ║ HandleRequests@handleUpdate
+            Γçé web
+            Γçé Livewire\Mechanisms\HandleRequests\RequireLivewireHeaders
+  POST      livewire-ebd836da/upload-file ........ livewire.upload-file ΓÇ║ Livewire\Features ΓÇ║ FileUploadController@handle
+            Γçé web
+            Γçé Illuminate\Routing\Middleware\ThrottleRequests:60,1
+  GET|HEAD  login .................................................. login ΓÇ║ Livewire\Mechanisms ΓÇ║ LivewirePageController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\RedirectIfAuthenticated
+  POST      logout ....................................................................... logout ΓÇ║ Auth\LogoutController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  GET|HEAD  pengaturan ..................................... settings.edit ΓÇ║ Livewire\Mechanisms ΓÇ║ LivewirePageController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  GET|HEAD  pengaturan/pengguna .............................. users.index ΓÇ║ Livewire\Mechanisms ΓÇ║ LivewirePageController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  GET|HEAD  sesi-kerja ............................... work-sessions.index ΓÇ║ Livewire\Mechanisms ΓÇ║ LivewirePageController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  GET|HEAD  sesi-kerja/baru ......................... work-sessions.create ΓÇ║ Livewire\Mechanisms ΓÇ║ LivewirePageController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  GET|HEAD  sesi-kerja/{workSession} .................. work-sessions.show ΓÇ║ Livewire\Mechanisms ΓÇ║ LivewirePageController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  GET|HEAD  sesi-kerja/{workSession}/cek ............ work-sessions.verify ΓÇ║ Livewire\Mechanisms ΓÇ║ LivewirePageController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  GET|HEAD  sesi-kerja/{workSession}/edit ............. work-sessions.edit ΓÇ║ Livewire\Mechanisms ΓÇ║ LivewirePageController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  GET|HEAD  sesi-kerja/{workSession}/export ........................ work-sessions.export ΓÇ║ SessionReportExportController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  GET|HEAD  sesi-kerja/{workSession}/struk/{receipt} ............................ receipts.print ΓÇ║ ReceiptPrintController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  POST      sesi-kerja/{workSession}/struk/{receipt}/dicetak ................ receipts.printed ΓÇ║ ReceiptPrintedController
+            Γçé web
+            Γçé Illuminate\Auth\Middleware\Authenticate
+            Γçé Spatie\Permission\Middleware\RoleMiddleware:admin
+  GET|HEAD  storage/{path} storage.local ΓÇ║ vendor/laravel/framework/src/Illuminate/Filesystem/FilesystemServiceProvider.php:111
+  PUT       storage/{path} storage.local.upload ΓÇ║ vendor/laravel/framework/src/Illuminate/Filesystem/FilesystemServiceProvider.php:119
+  GET|HEAD  up .............. vendor/laravel/framework/src/Illuminate/Foundation/Configuration/ApplicationBuilder.php:224
+
+                                                                                                      Showing [29] routes
+
