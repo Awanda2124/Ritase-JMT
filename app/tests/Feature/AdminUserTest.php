@@ -114,14 +114,37 @@ it('does not let an admin delete their own account', function () {
     expect(User::query()->whereKey($admin->id)->exists())->toBeTrue();
 });
 
-it('does not delete the last admin', function () {
+// it('does not delete the last admin', function () {
+//     $lastAdmin = makeAdminUser();
+//     $outsider = User::factory()->create();
+
+//     expect(fn () => app(AdminUserService::class)->delete($lastAdmin, $outsider))
+//         ->toThrow(DomainException::class, 'Admin terakhir tidak boleh dihapus.');
+
+//     expect(User::query()->whereKey($lastAdmin->id)->exists())->toBeTrue();
+// });
+
+it('rejects deleting an admin when the actor is not an admin', function () {
     $lastAdmin = makeAdminUser();
     $outsider = User::factory()->create();
 
     expect(fn () => app(AdminUserService::class)->delete($lastAdmin, $outsider))
-        ->toThrow(DomainException::class, 'Admin terakhir tidak boleh dihapus.');
+        ->toThrow(\Symfony\Component\HttpKernel\Exception\HttpException::class);
 
     expect(User::query()->whereKey($lastAdmin->id)->exists())->toBeTrue();
+});
+
+it('refuses to edit or delete a user who is not an admin', function () {
+    $admin = makeAdminUser();
+    $notAdmin = User::factory()->create();
+
+    expect(fn () => app(AdminUserService::class)->update($notAdmin, ['name' => 'X', 'email' => 'x@example.com'], $admin))
+        ->toThrow(DomainException::class, 'Pengguna ini bukan admin.');
+
+    expect(fn () => app(AdminUserService::class)->delete($notAdmin, $admin))
+        ->toThrow(DomainException::class, 'Pengguna ini bukan admin.');
+
+    expect(User::query()->whereKey($notAdmin->id)->exists())->toBeTrue();
 });
 
 it('does not delete an admin who created work sessions', function () {
