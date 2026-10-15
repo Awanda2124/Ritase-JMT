@@ -16,7 +16,7 @@ use Illuminate\Validation\ValidationException;
 
 class DriverRegistrationService
 {
-    private const IP_MAX_ATTEMPTS = 60;   // per menit per IP (banyak supir bisa satu jaringan)
+    private const IP_MAX_ATTEMPTS = 200;   // per menit per IP (banyak supir bisa satu jaringan)
 
     private const KTP_MAX_ATTEMPTS = 5;   // per menit per KTP (cegah spam satu orang)
 

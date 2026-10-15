@@ -1,23 +1,5 @@
 <?php
 
-// namespace App\Providers;
-
-// use App\Services\SettingService;
-// use Illuminate\Support\ServiceProvider;
-
-// class AppServiceProvider extends ServiceProvider
-// {
-//     public function register(): void
-//     {
-//         $this->app->singleton(SettingService::class);
-//     }
-
-//     public function boot(): void
-//     {
-//         //
-//     }
-// }
-
 namespace App\Providers;
 
 use App\Services\SettingService;
@@ -33,6 +15,10 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        \Livewire\Livewire::addPersistentMiddleware([
+            \Spatie\Permission\Middleware\RoleMiddleware::class,
+        ]);
+
         if (request()->header('x-forwarded-proto') === 'https') {
             URL::forceScheme('https');
         }

@@ -14,7 +14,7 @@ use Illuminate\Validation\ValidationException;
 
 class CheckInService
 {
-    private const IP_MAX_ATTEMPTS = 60;
+    private const IP_MAX_ATTEMPTS = 200;
 
     private const DRIVER_MAX_ATTEMPTS = 10;
 

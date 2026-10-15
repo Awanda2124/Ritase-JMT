@@ -20,7 +20,7 @@ class TripReportService
 {
     public const MAX_TRIPS_PER_SESSION = 7;
 
-    private const IP_MAX_ATTEMPTS = 60;      // per menit per IP (banyak supir bisa satu jaringan)
+    private const IP_MAX_ATTEMPTS = 200;      // per menit per IP (banyak supir bisa satu jaringan)
 
     private const DRIVER_MAX_ATTEMPTS = 10;  // per menit per supir
 
