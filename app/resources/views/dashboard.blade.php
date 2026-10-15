@@ -40,7 +40,7 @@
                         <span class="flex h-2 w-2 rounded-full bg-emerald-500">
                             <span class="h-2 w-2 animate-ping rounded-full bg-emerald-500 opacity-75"></span>
                         </span>
-                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700">{{ $activeSession->isLive() ? 'Sesi aktif' : 'Sesi terakhir &middot; selesai' }}</span>
+                        <span class="text-xs font-bold uppercase tracking-wider text-emerald-700">Sesi aktif</span>
                     </div>
                     <p class="mt-2 text-lg font-bold text-slate-900">{{ $activeSession->route }}</p>
                     <p class="mt-0.5 text-sm text-slate-500">

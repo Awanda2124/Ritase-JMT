@@ -16,10 +16,10 @@ class DashboardController extends Controller
         $startOfDay = now()->startOfDay();
         $endOfDay = now()->endOfDay();
 
-        // Sesi terbaru (bukan cuma hari ini) — biar dashboard tetep nampilin data
-        // walau sesi terakhir udah lewat.
+        // Hanya sesi yang sedang berjalan (sudah dibuka, batas lapor belum lewat).
         $activeSession = WorkSession::query()
             ->withCount('sessionDrivers')
+            ->reportable()
             ->latest('date')
             ->first();
 
