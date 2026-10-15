@@ -22,7 +22,8 @@ new #[Layout('layouts.blank')] #[Title('Masuk')] class extends Component
             $this->remember,
         );
 
-        $this->redirectIntended(route('dashboard'), navigate: true);
+        // $this->redirectIntended(route('dashboard'), navigate: true);
+        $this->redirectIntended(route('dashboard'));
     }
 };
 ?>

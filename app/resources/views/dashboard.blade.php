@@ -220,14 +220,14 @@
                                 <tr class="transition-colors hover:bg-slate-50/60">
                                     <td class="px-5 py-3" data-value="{{ $sd->driver->name }}">
                                         <div class="flex items-center gap-3">
-                                            <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">
+                                            <!-- <div class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-900 text-[10px] font-bold text-white">
                                                 {{ mb_strtoupper($initials) }}
-                                            </div>
+                                            </div> -->
                                             <span class="font-semibold text-slate-900">{{ $sd->driver->name }}</span>
                                         </div>
                                     </td>
                                     <td class="px-3 py-3 font-mono text-xs text-slate-500" data-value="{{ $sd->driver->maskedKtp() }}">{{ $sd->driver->maskedKtp() }}</td>
-                                    <td class="px-3 py-3 text-slate-600" data-value="{{ $sd->checked_in_at?->timestamp }}">
+                                    <td class="px-3 py-3 text-slate-600 text-center" data-value="{{ $sd->checked_in_at?->timestamp }}">
                                         {{ $sd->checked_in_at ? $sd->checked_in_at->format('H:i') : '—' }}
                                     </td>
                                     <td class="px-3 py-3" data-value="{{ $sd->checked_in_at ? 'Di lokasi' : 'Belum check-in' }}">
@@ -243,7 +243,7 @@
                                             </span>
                                         @endif
                                     </td>
-                                    <td class="px-5 py-3 text-right font-semibold text-slate-900" data-value="{{ $ritaseCount }}">{{ $ritaseCount }}</td>
+                                    <td class="px-5 py-3 text-center font-semibold text-slate-900" data-value="{{ $ritaseCount }}">{{ $ritaseCount }}</td>
                                 </tr>
                             @endforeach
                         </tbody>

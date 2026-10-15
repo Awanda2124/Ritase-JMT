@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\SessionDriver;
+use App\Models\SessionGroup;
 use App\Models\WorkSession;
 use App\Services\CheckInService;
 use App\Services\DriverRegistrationService;
@@ -21,9 +22,22 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
     #[Url(as: 'ci')]
     public string $checkInFilter = 'semua'; // semua | sudah | belum
 
+    #[Url(as: 'grup')]
+    public string $groupFilter = 'semua'; // semua | {id}
+
     public int $visibleCount = 10;
 
     public int $perPage = 10;
+
+    /** Pause auto-refresh saat user lagi search/filter biar gak ganggu input. */
+    protected function getPollingInterval(): ?string
+    {
+        $isFiltering = ! empty($this->search)
+            || $this->checkInFilter !== 'semua'
+            || $this->groupFilter !== 'semua';
+
+        return $isFiltering ? null : '5s';
+    }
 
     public function mount(WorkSession $workSession): void
     {
@@ -45,20 +59,29 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
         $this->visibleCount = $this->perPage;
     }
 
-    #[Computed]
-    public function allRoster(): \Illuminate\Support\Collection
+    public function updatedGroupFilter(): void
     {
-        return $this->workSession
-            ->sessionDrivers()
-            ->with(['driver:id,name,ktp', 'group:id,name'])
-            ->oldest('registered_at')
-            ->get();
+        $this->visibleCount = $this->perPage;
     }
 
     #[Computed]
     public function groups(): \Illuminate\Support\Collection
     {
-        return $this->workSession->groups()->withCount('sessionDrivers')->get();
+        return SessionGroup::query()
+            ->where('work_session_id', $this->workSession->id)
+            ->withCount('sessionDrivers')
+            ->orderBy('name')
+            ->get();
+    }
+
+    #[Computed]
+    public function allRoster(): \Illuminate\Support\Collection
+    {
+        return $this->workSession
+            ->sessionDrivers()
+            ->with(['driver', 'group'])
+            ->oldest('registered_at')
+            ->get();
     }
 
     #[Computed]
@@ -66,20 +89,31 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
     {
         $needle = mb_strtolower(trim($this->search));
         $checkIn = $this->checkInFilter;
+        $group = $this->groupFilter;
 
         return $this->allRoster
-            ->filter(function (SessionDriver $sd) use ($needle, $checkIn) {
+            ->filter(function (SessionDriver $sd) use ($needle, $checkIn, $group) {
                 // Filter nama
                 if ($needle !== '' && ! str_contains(mb_strtolower($sd->driver->name), $needle)) {
                     return false;
                 }
 
                 // Filter check-in
-                return match ($checkIn) {
+                $checkInOk = match ($checkIn) {
                     'sudah' => $sd->checked_in_at !== null,
                     'belum' => $sd->checked_in_at === null,
                     default => true,
                 };
+                if (! $checkInOk) {
+                    return false;
+                }
+
+                // Filter kelompok
+                if ($group !== 'semua' && (string) $sd->session_group_id !== (string) $group) {
+                    return false;
+                }
+
+                return true;
             })
             ->values();
     }
@@ -109,7 +143,8 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             ->findOrFail($sessionDriverId);
 
         $registration->removeFromRoster($sessionDriver, auth()->user());
-        unset($this->allRoster, $this->groups, $this->filteredRoster, $this->visibleRoster, $this->countSudah, $this->countBelum);
+        $this->workSession->refresh();
+        unset($this->allRoster, $this->filteredRoster, $this->visibleRoster, $this->countSudah, $this->countBelum, $this->groups);
         session()->flash('status', 'Supir dihapus dari roster.');
     }
 
@@ -122,25 +157,24 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             ->findOrFail($sessionDriverId);
 
         $checkIn->checkInManually($sessionDriver, auth()->user());
-        unset($this->allRoster, $this->groups, $this->filteredRoster, $this->visibleRoster, $this->countSudah, $this->countBelum);
+        $this->workSession->refresh();
+        unset($this->allRoster, $this->filteredRoster, $this->visibleRoster, $this->countSudah, $this->countBelum, $this->groups);
         session()->flash('status', 'Check-in manual dicatat.');
     }
 };
 ?>
 
 @php
-    $filled = $this->allRoster->count();
+    $filled = $workSession->sessionDrivers()->count();
     $quota = max((int) $workSession->quota, 1);
-    $hadir = $this->countSudah;
+    $hadir = $workSession->sessionDrivers()->whereNotNull('checked_in_at')->count();
     $percent = min(100, round(($filled / $quota) * 100));
     $totalFiltered = $this->filteredRoster->count();
     $shown = $this->visibleRoster->count();
     $remaining = max(0, $totalFiltered - $shown);
 @endphp
 
-{{-- Poll berhenti saat admin lagi search/filter supaya input tidak terganggu --}}
-<div style="display: flex; flex-direction: column; gap: 20px;"
-     @if ($search === '' && $checkInFilter === 'semua') wire:poll.10s.visible @endif>
+<div style="display: flex; flex-direction: column; gap: 20px;" wire:poll.5s.visible>
 
     {{-- ===== HEADER ===== --}}
     <div>
@@ -209,6 +243,7 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
     {{-- ===== STAT CARDS ===== --}}
     <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;">
 
+        {{-- Terdaftar --}}
         <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
             <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #dbeafe; color: #2563eb;">
                 <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -223,6 +258,7 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             </div>
         </div>
 
+        {{-- Hadir (X/Y = hadir/terdaftar) --}}
         <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
             <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #d1fae5; color: #059669;">
                 <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -231,10 +267,13 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             </span>
             <div style="min-width: 0; overflow: hidden;">
                 <p style="margin: 0; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Hadir</p>
-                <p style="margin: 0; font-size: 16px; font-weight: 700; line-height: 1.1; color: #0f172a;">{{ $hadir }}</p>
+                <p style="margin: 0; font-size: 16px; font-weight: 700; line-height: 1.1; color: #0f172a;">
+                    {{ $hadir }}<span style="margin-left: 4px; font-size: 12px; font-weight: 600; color: #94a3b8;">/ {{ $filled }}</span>
+                </p>
             </div>
         </div>
 
+        {{-- Batas check-in --}}
         <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
             <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #fef3c7; color: #d97706;">
                 <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -249,6 +288,7 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             </div>
         </div>
 
+        {{-- Batas lapor --}}
         <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
             <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #ede9fe; color: #7c3aed;">
                 <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -373,26 +413,49 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             </div>
         </div>
 
-        {{-- Filter tabs --}}
+        {{-- Filter bar: check-in + kelompok (1 baris) --}}
         <div style="padding: 12px 20px; border-bottom: 1px solid #f1f5f9; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between;">
-            <div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: #f1f5f9; border-radius: 12px;">
-                @php
-                    $ciFilters = [
-                        'semua' => ['Semua', $filled],
-                        'sudah' => ['Sudah check-in', $this->countSudah],
-                        'belum' => ['Belum check-in', $this->countBelum],
-                    ];
-                @endphp
-                @foreach ($ciFilters as $key => [$label, $count])
-                    <button type="button" wire:click="$set('checkInFilter', '{{ $key }}')"
-                            style="display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
-                                   {{ $checkInFilter === $key ? 'background: #ffffff; color: #0f172a; box-shadow: 0 1px 2px rgba(15,23,42,.08);' : 'background: transparent; color: #475569;' }}">
-                        {{ $label }}
-                        <span style="border-radius: 9999px; background: {{ $checkInFilter === $key ? '#e2e8f0' : '#cbd5e1' }}; padding: 1px 6px; font-size: 10px; color: #334155;">{{ $count }}</span>
-                    </button>
-                @endforeach
+
+            {{-- Kiri: filter check-in (segmented) + dropdown kelompok --}}
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
+
+                {{-- Filter check-in --}}
+                <div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: #f1f5f9; border-radius: 12px;">
+                    @php
+                        $ciFilters = [
+                            'semua' => ['Semua', $filled],
+                            'sudah' => ['Sudah check-in', $this->countSudah],
+                            'belum' => ['Belum check-in', $this->countBelum],
+                        ];
+                    @endphp
+                    @foreach ($ciFilters as $key => [$label, $count])
+                        <button type="button" wire:click="$set('checkInFilter', '{{ $key }}')"
+                                style="display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit;
+                                       {{ $checkInFilter === $key ? 'background: #ffffff; color: #0f172a; box-shadow: 0 1px 2px rgba(15,23,42,.08);' : 'background: transparent; color: #475569;' }}">
+                            {{ $label }}
+                            <span style="border-radius: 9999px; background: {{ $checkInFilter === $key ? '#e2e8f0' : '#cbd5e1' }}; padding: 1px 6px; font-size: 10px; color: #334155;">{{ $count }}</span>
+                        </button>
+                    @endforeach
+                </div>
+
+                {{-- Dropdown kelompok (cuma muncul kalau >1 kelompok) --}}
+                @if ($this->groups->count() > 1)
+                    <div style="position: relative;">
+                        <select wire:model.live="groupFilter"
+                                style="display: block; appearance: none; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; padding: 8px 36px 8px 12px; font-size: 12px; font-weight: 600; color: #0f172a; outline: none; cursor: pointer; font-family: inherit;">
+                            <option value="semua">Kelompok: Semua ({{ $filled }})</option>
+                            @foreach ($this->groups as $group)
+                                <option value="{{ $group->id }}">Kelompok: {{ $group->name }} ({{ $group->session_drivers_count }})</option>
+                            @endforeach
+                        </select>
+                        <svg style="position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: #64748b; pointer-events: none;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </div>
+                @endif
             </div>
 
+            {{-- Kanan: counter --}}
             <span style="font-size: 12px; font-weight: 500; color: #64748b;">
                 Menampilkan <strong style="color: #0f172a;">{{ $shown }}</strong> dari <strong style="color: #0f172a;">{{ $totalFiltered }}</strong> supir
                 @if ($remaining > 0)
@@ -499,12 +562,14 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                                         Belum ada supir yang check-in
                                     @elseif ($checkInFilter === 'belum')
                                         Semua supir sudah check-in
+                                    @elseif ($groupFilter !== 'semua')
+                                        Belum ada supir di kelompok ini
                                     @else
                                         Belum ada supir terdaftar
                                     @endif
                                 </p>
                                 <p class="mt-1 text-xs text-slate-500">
-                                    @if ($search === '' && $checkInFilter === 'semua')
+                                    @if ($search === '' && $checkInFilter === 'semua' && $groupFilter === 'semua')
                                         Bagikan link registrasi di atas untuk memulai.
                                     @endif
                                 </p>
