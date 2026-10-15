@@ -7,6 +7,7 @@ use App\Exceptions\DriverNotInRosterException;
 use App\Exceptions\NotCheckedInException;
 use App\Exceptions\ReportingClosedException;
 use App\Exceptions\ReportLimitExceededException;
+use App\Models\Receipt;
 use App\Models\SessionDriver;
 use App\Models\TripReport;
 use App\Models\WorkSession;
@@ -76,6 +77,11 @@ class TripReportService
 
             if ($sessionDriver->checked_in_at === null) {
                 throw new NotCheckedInException;
+            }
+
+            if (Receipt::query()->active()->where('work_session_id', $session->id)->where('driver_id', $driverId)->exists()) {
+                // Struk sudah terbit: laporan supir ini terkunci sampai struknya dibatalkan.
+                throw new ReportingClosedException;
             }
 
             $existing = TripReport::query()

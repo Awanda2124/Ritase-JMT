@@ -1,0 +1,438 @@
+﻿===== database\migrations\2026_10_12_113924_create_receipts_table.php =====
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('receipts', function (Blueprint $table) {
+            $table->id();
+            $table->string('receipt_no')->unique();
+            $table->foreignId('work_session_id')->constrained('work_sessions')->restrictOnDelete();
+            $table->foreignId('driver_id')->constrained('drivers')->restrictOnDelete();
+            $table->unsignedInteger('total_trips');
+            $table->unsignedInteger('amount');
+            $table->foreignId('printed_by')->constrained('users')->restrictOnDelete();
+            $table->timestamp('printed_at');
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('receipts');
+    }
+};
+===== app\Models\Receipt.php =====
+<?php
+
+namespace App\Models;
+
+use Database\Factories\ReceiptFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
+
+class Receipt extends Model
+{
+    /** @use HasFactory<ReceiptFactory> */
+    use HasFactory, LogsActivity;
+
+    protected $fillable = [
+        'receipt_no',
+        'work_session_id',
+        'driver_id',
+        'total_trips',
+        'amount',
+        'printed_by',
+        'printed_at',
+    ];
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'total_trips' => 'integer',
+            'amount' => 'integer',
+            'printed_at' => 'datetime',
+        ];
+    }
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logFillable()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
+    public function workSession(): BelongsTo
+    {
+        return $this->belongsTo(WorkSession::class);
+    }
+
+    public function driver(): BelongsTo
+    {
+        return $this->belongsTo(Driver::class);
+    }
+
+    public function printer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'printed_by');
+    }
+}
+===== database\factories\ReceiptFactory.php =====
+<?php
+
+namespace Database\Factories;
+
+use App\Models\Driver;
+use App\Models\Receipt;
+use App\Models\User;
+use App\Models\WorkSession;
+use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Str;
+
+/**
+ * @extends Factory<Receipt>
+ */
+class ReceiptFactory extends Factory
+{
+    /**
+     * @return array<string, mixed>
+     */
+    public function definition(): array
+    {
+        $totalTrips = fake()->numberBetween(1, 7);
+
+        return [
+            'receipt_no' => Str::upper(Str::random(12)),
+            'work_session_id' => WorkSession::factory(),
+            'driver_id' => Driver::factory(),
+            'total_trips' => $totalTrips,
+            'amount' => 0,
+            'printed_by' => User::factory(),
+            'printed_at' => now(),
+        ];
+    }
+}
+===== app\Services\TripVerificationService.php =====
+<?php
+
+namespace App\Services;
+
+use App\Enums\TripReportStatus;
+use App\Models\SessionDriver;
+use App\Models\TripReport;
+use App\Models\User;
+use App\Models\WorkSession;
+use App\Support\RoleName;
+use DomainException;
+use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
+
+class TripVerificationService
+{
+    public function setStatus(TripReport $report, TripReportStatus $status, User $admin): TripReport
+    {
+        $this->authorize($admin);
+
+        return DB::transaction(function () use ($report, $status, $admin) {
+            $locked = TripReport::query()->whereKey($report->id)->lockForUpdate()->firstOrFail();
+
+            // Void -> aktif lagi tidak boleh melewati batas 7 per supir per sesi.
+            if ($locked->status === TripReportStatus::Void && $status !== TripReportStatus::Void) {
+                $active = TripReport::query()
+                    ->where('work_session_id', $locked->work_session_id)
+                    ->where('driver_id', $locked->driver_id)
+                    ->where('status', '!=', TripReportStatus::Void)
+                    ->where('id', '!=', $locked->id)
+                    ->count();
+
+                if ($active >= TripReportService::MAX_TRIPS_PER_SESSION) {
+                    throw new DomainException('Supir ini sudah punya 7 ritase aktif, tidak bisa mengaktifkan lagi.');
+                }
+            }
+
+            $this->applyStatus($locked, $status, $admin);
+
+            return $locked;
+        });
+    }
+
+    public function approveAllPending(WorkSession $session, int $driverId, User $admin): int
+    {
+        $this->authorize($admin);
+
+        return DB::transaction(function () use ($session, $driverId, $admin) {
+            $reports = TripReport::query()
+                ->where('work_session_id', $session->id)
+                ->where('driver_id', $driverId)
+                ->where('status', TripReportStatus::Menunggu)
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($reports as $report) {
+                $this->applyStatus($report, TripReportStatus::Cocok, $admin);
+            }
+
+            return $reports->count();
+        });
+    }
+
+    public function correctChassis(TripReport $report, string $chassisLast4, User $admin): TripReport
+    {
+        $this->authorize($admin);
+
+        if (! preg_match('/^\d{4}$/', $chassisLast4)) {
+            throw new InvalidArgumentException('Nomor sasis harus 4 digit angka.');
+        }
+
+        return DB::transaction(function () use ($report, $chassisLast4, $admin) {
+            $locked = TripReport::query()->whereKey($report->id)->lockForUpdate()->firstOrFail();
+
+            if ($locked->status === TripReportStatus::Void) {
+                throw new DomainException('Laporan void tidak bisa diubah. Kembalikan ke menunggu dulu.');
+            }
+
+            if ($locked->chassis_last4 === $chassisLast4) {
+                return $locked;
+            }
+
+            // Koreksi = harus dicek ulang, jadi verifikasi lama dihapus.
+            $locked->update([
+                'chassis_last4' => $chassisLast4,
+                'status' => TripReportStatus::Menunggu,
+                'verified_by' => null,
+                'verified_at' => null,
+            ]);
+
+            return $locked;
+        });
+    }
+
+    public function saveNote(SessionDriver $sessionDriver, ?string $note, User $admin): void
+    {
+        $this->authorize($admin);
+
+        $note = trim((string) $note);
+
+        $sessionDriver->update(['note' => $note === '' ? null : mb_substr($note, 0, 500)]);
+    }
+
+    private function applyStatus(TripReport $report, TripReportStatus $status, User $admin): void
+    {
+        $pending = $status === TripReportStatus::Menunggu;
+
+        $report->update([
+            'status' => $status,
+            'verified_by' => $pending ? null : $admin->id,
+            'verified_at' => $pending ? null : now(),
+        ]);
+    }
+
+    private function authorize(User $admin): void
+    {
+        abort_unless($admin->hasRole(RoleName::ADMIN), 403);
+    }
+}
+===== app\Services\TripReportService.php =====
+<?php
+
+namespace App\Services;
+
+use App\Enums\TripReportStatus;
+use App\Exceptions\DriverNotInRosterException;
+use App\Exceptions\NotCheckedInException;
+use App\Exceptions\ReportingClosedException;
+use App\Exceptions\ReportLimitExceededException;
+use App\Models\SessionDriver;
+use App\Models\TripReport;
+use App\Models\WorkSession;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
+use InvalidArgumentException;
+
+class TripReportService
+{
+    public const MAX_TRIPS_PER_SESSION = 7;
+
+    private const IP_MAX_ATTEMPTS = 60;      // per menit per IP (banyak supir bisa satu jaringan)
+
+    private const DRIVER_MAX_ATTEMPTS = 10;  // per menit per supir
+
+    private const DECAY_SECONDS = 60;
+
+    public function __construct(private GeofenceService $geofence) {}
+
+    /**
+     * @param  array<int, string>  $chassisLast4  4 digit terakhir sasis, satu per ritase
+     * @return int jumlah laporan yang tersimpan
+     */
+    public function submit(int $workSessionId, int $driverId, array $chassisLast4, float $lat, float $lng): int
+    {
+        $chassisLast4 = array_values($chassisLast4);
+        $count = count($chassisLast4);
+
+        foreach ($chassisLast4 as $chassis) {
+            if (! is_string($chassis) || preg_match('/^\d{4}$/', $chassis) !== 1) {
+                throw new InvalidArgumentException('Sasis harus 4 digit angka.');
+            }
+        }
+
+        if ($count < 1) {
+            throw new InvalidArgumentException('Minimal satu sasis.');
+        }
+
+        if ($count > self::MAX_TRIPS_PER_SESSION) {
+            throw new ReportLimitExceededException(0);
+        }
+
+        $this->throttle($driverId);
+
+        // Penjaga sebenarnya ada di server: lokasi dicek ulang di sini.
+        $this->geofence->ensureWithinRadius($lat, $lng);
+
+        $session = WorkSession::query()->findOrFail($workSessionId);
+
+        if (! $session->isReportingOpen()) {
+            throw new ReportingClosedException;
+        }
+
+        return DB::transaction(function () use ($session, $driverId, $chassisLast4, $count, $lat, $lng): int {
+            // Kunci baris roster supir ini supaya dua kiriman bersamaan
+            // dari supir yang sama tidak bisa menembus batas 7.
+            $sessionDriver = SessionDriver::query()
+                ->where('work_session_id', $session->id)
+                ->where('driver_id', $driverId)
+                ->lockForUpdate()
+                ->first();
+
+            if ($sessionDriver === null) {
+                throw new DriverNotInRosterException;
+            }
+
+            if ($sessionDriver->checked_in_at === null) {
+                throw new NotCheckedInException;
+            }
+
+            $existing = TripReport::query()
+                ->where('work_session_id', $session->id)
+                ->where('driver_id', $driverId)
+                ->where('status', '!=', TripReportStatus::Void->value)
+                ->count();
+
+            if ($existing + $count > self::MAX_TRIPS_PER_SESSION) {
+                throw new ReportLimitExceededException($existing);
+            }
+
+            $reportedAt = now();
+
+            // Satu INSERT untuk semua sasis (bukan N create + N activity log)
+            // supaya kunci baris roster cepat dilepas.
+            TripReport::query()->insert(array_map(fn (string $chassis): array => [
+                'work_session_id' => $session->id,
+                'driver_id' => $driverId,
+                'chassis_last4' => $chassis,
+                'status' => TripReportStatus::Menunggu->value,
+                'lat' => $lat,
+                'lng' => $lng,
+                'reported_at' => $reportedAt,
+                'created_at' => $reportedAt,
+                'updated_at' => $reportedAt,
+            ], $chassisLast4));
+
+            return $count;
+        }, 3);
+    }
+
+    private function throttle(int $driverId): void
+    {
+        $ipKey = 'trip-report:ip:'.request()->ip();
+        $driverKey = 'trip-report:driver:'.$driverId;
+
+        if (RateLimiter::tooManyAttempts($ipKey, self::IP_MAX_ATTEMPTS)
+            || RateLimiter::tooManyAttempts($driverKey, self::DRIVER_MAX_ATTEMPTS)) {
+            throw ValidationException::withMessages([
+                'chassis' => 'Terlalu banyak percobaan. Coba lagi sebentar.',
+            ]);
+        }
+
+        RateLimiter::hit($ipKey, self::DECAY_SECONDS);
+        RateLimiter::hit($driverKey, self::DECAY_SECONDS);
+    }
+}
+===== app\Models\Driver.php =====
+<?php
+
+namespace App\Models;
+
+use Database\Factories\DriverFactory;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
+
+class Driver extends Model
+{
+    /** @use HasFactory<DriverFactory> */
+    use HasFactory, LogsActivity;
+
+    protected $fillable = [
+        'name',
+        'ktp',
+    ];
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        // KTP sengaja tidak dicatat: nomor lengkap tidak boleh masuk activity_log.
+        return LogOptions::defaults()
+            ->logOnly(['name'])
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
+    public function maskedKtp(): string
+    {
+        $ktp = (string) $this->ktp;
+
+        if (strlen($ktp) !== 16) {
+            return $ktp;
+        }
+
+        return substr($ktp, 0, 4).str_repeat('â€¢', 8).substr($ktp, -4);
+    }
+
+    public function sessionDrivers(): HasMany
+    {
+        return $this->hasMany(SessionDriver::class);
+    }
+
+    public function workSessions(): BelongsToMany
+    {
+        return $this->belongsToMany(WorkSession::class, 'session_drivers')
+            ->withPivot(['registered_at', 'note'])
+            ->withTimestamps();
+    }
+
+    public function tripReports(): HasMany
+    {
+        return $this->hasMany(TripReport::class);
+    }
+
+    public function receipts(): HasMany
+    {
+        return $this->hasMany(Receipt::class);
+    }
+}

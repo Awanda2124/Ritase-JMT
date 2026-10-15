@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\TripReportStatus;
+use App\Models\Receipt;
 use App\Models\SessionDriver;
 use App\Models\TripReport;
 use App\Models\User;
@@ -20,6 +21,8 @@ class TripVerificationService
 
         return DB::transaction(function () use ($report, $status, $admin) {
             $locked = TripReport::query()->whereKey($report->id)->lockForUpdate()->firstOrFail();
+
+            $this->ensureUnlocked($locked->work_session_id, $locked->driver_id);
 
             // Void -> aktif lagi tidak boleh melewati batas 7 per supir per sesi.
             if ($locked->status === TripReportStatus::Void && $status !== TripReportStatus::Void) {
@@ -53,6 +56,8 @@ class TripVerificationService
                 ->lockForUpdate()
                 ->get();
 
+            $this->ensureUnlocked($session->id, $driverId);
+
             foreach ($reports as $report) {
                 $this->applyStatus($report, TripReportStatus::Cocok, $admin);
             }
@@ -71,6 +76,8 @@ class TripVerificationService
 
         return DB::transaction(function () use ($report, $chassisLast4, $admin) {
             $locked = TripReport::query()->whereKey($report->id)->lockForUpdate()->firstOrFail();
+
+            $this->ensureUnlocked($locked->work_session_id, $locked->driver_id);
 
             if ($locked->status === TripReportStatus::Void) {
                 throw new DomainException('Laporan void tidak bisa diubah. Kembalikan ke menunggu dulu.');
@@ -99,6 +106,19 @@ class TripVerificationService
         $note = trim((string) $note);
 
         $sessionDriver->update(['note' => $note === '' ? null : mb_substr($note, 0, 500)]);
+    }
+
+    /** Setelah struk terbit, laporan supir itu terkunci sampai struknya dibatalkan. */
+    private function ensureUnlocked(int $workSessionId, int $driverId): void
+    {
+        $locked = Receipt::query()->active()
+            ->where('work_session_id', $workSessionId)
+            ->where('driver_id', $driverId)
+            ->exists();
+
+        if ($locked) {
+            throw new DomainException('Struk sudah terbit untuk supir ini. Batalkan struk dulu kalau laporan perlu diubah.');
+        }
     }
 
     private function applyStatus(TripReport $report, TripReportStatus $status, User $admin): void
