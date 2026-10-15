@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Auth\LogoutController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ReceiptPrintController;
+use App\Http\Controllers\ReceiptPrintedController;
 use App\Http\Controllers\SessionReportExportController;
 use App\Support\RoleName;
 use Illuminate\Support\Facades\Route;
@@ -31,6 +33,8 @@ Route::middleware(['auth', 'role:'.RoleName::ADMIN])->group(function () {
     Route::livewire('/sesi-kerja/{workSession}', 'admin.work-sessions.show')->name('work-sessions.show');
     Route::livewire('/sesi-kerja/{workSession}/cek', 'admin.work-sessions.verify')->name('work-sessions.verify');
     Route::get('/sesi-kerja/{workSession}/export', SessionReportExportController::class)->name('work-sessions.export');
+    Route::get('/sesi-kerja/{workSession}/struk/{receipt}', ReceiptPrintController::class)->name('receipts.print');
+    Route::post('/sesi-kerja/{workSession}/struk/{receipt}/dicetak', ReceiptPrintedController::class)->name('receipts.printed');
     Route::livewire('/pengaturan', 'admin.settings')->name('settings.edit');
     Route::livewire('/pengaturan/pengguna', 'admin.users.index')->name('users.index');
 });
