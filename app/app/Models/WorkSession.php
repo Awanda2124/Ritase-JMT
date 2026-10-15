@@ -146,6 +146,20 @@ class WorkSession extends Model
         return $deadline === null || ! $deadline->isPast();
     }
 
+    /** Sesi sedang berjalan: sudah dibuka dan batas lapor belum lewat. */
+    public function isLive(): bool
+    {
+        return $this->isReportingOpen();
+    }
+
+    /** Sesi selesai: batas lapor sudah lewat. */
+    public function isFinished(): bool
+    {
+        $deadline = $this->reportDeadline();
+
+        return $deadline !== null && $deadline->isPast();
+    }
+
     public function checkInDeadline(): ?Carbon
     {
         return $this->checkin_closes_at ?? $this->reportDeadline();

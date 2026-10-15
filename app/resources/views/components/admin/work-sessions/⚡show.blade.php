@@ -219,10 +219,14 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             <div class="min-w-0">
                 <h1 class="flex flex-wrap items-center gap-2 text-2xl font-bold text-slate-900 sm:text-3xl">
                     {{ $workSession->route }}
-                    <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #10b981; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 9999px;">
+                    @if ($workSession->isLive())
+<span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #10b981; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 9999px;">
                         <span style="width: 6px; height: 6px; border-radius: 9999px; background: #10b981; animation: pulse 2s infinite;"></span>
                         Live
                     </span>
+@else
+<span style="display: inline-flex; align-items: center; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 3px 8px; border-radius: 9999px;">Selesai</span>
+@endif
                 </h1>
                 <p class="mt-1 text-sm text-slate-500">
                     {{ $workSession->date->translatedFormat('d M Y') }}

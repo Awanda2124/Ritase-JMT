@@ -307,10 +307,14 @@ new #[Layout('layouts.app')] class extends Component {
             <h1 class="mt-2 flex items-center gap-2 text-2xl font-bold text-slate-900">
                 Cek tiket
                 {{-- Indikator live --}}
-                <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #10b981; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 9999px;">
+                @if ($workSession->isLive())
+<span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #10b981; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 9999px;">
                     <span style="width: 6px; height: 6px; border-radius: 9999px; background: #10b981; animation: pulse 2s infinite;"></span>
                     Live
                 </span>
+@else
+<span style="display: inline-flex; align-items: center; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 3px 8px; border-radius: 9999px;">Selesai</span>
+@endif
                 <style>
                     @keyframes pulse {
                         0%, 100% { opacity: 1; }
