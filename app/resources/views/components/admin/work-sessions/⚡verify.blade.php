@@ -1,9 +1,11 @@
 <?php
 
 use App\Enums\TripReportStatus;
+use App\Models\Receipt;
 use App\Models\SessionDriver;
 use App\Models\TripReport;
 use App\Models\WorkSession;
+use App\Services\ReceiptService;
 use App\Services\TripVerificationService;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\Computed;
@@ -31,6 +33,9 @@ new #[Layout('layouts.app')] class extends Component {
 
     /** @var array<int, string> */
     public array $edits = [];
+
+    /** @var array<int, string> alasan batal struk, key = receipt id */
+    public array $voidReasons = [];
 
     public function mount(WorkSession $workSession): void
     {
@@ -155,6 +160,51 @@ new #[Layout('layouts.app')] class extends Component {
             ->all();
     }
 
+    /** Struk aktif per supir (key = driver_id). */
+    #[Computed]
+    public function receipts(): Collection
+    {
+        return Receipt::query()
+            ->active()
+            ->where('work_session_id', $this->workSession->id)
+            ->get()
+            ->keyBy('driver_id');
+    }
+
+    public function issueReceipt(int $driverId): void
+    {
+        try {
+            $receipt = app(ReceiptService::class)->issue($this->workSession, $driverId, auth()->user());
+        } catch (\DomainException $e) {
+            $this->addError('action', $e->getMessage());
+
+            return;
+        }
+
+        $this->resetErrorBag('action');
+        unset($this->receipts);
+
+        $this->redirect(route('receipts.print', [$this->workSession, $receipt]));
+    }
+
+    public function voidReceipt(int $receiptId): void
+    {
+        $receipt = Receipt::query()
+            ->where('work_session_id', $this->workSession->id)
+            ->findOrFail($receiptId);
+
+        try {
+            app(ReceiptService::class)->void($receipt, (string) ($this->voidReasons[$receiptId] ?? ''), auth()->user());
+        } catch (\DomainException|\InvalidArgumentException $e) {
+            $this->addError("voidReasons.$receiptId", $e->getMessage());
+
+            return;
+        }
+
+        unset($this->voidReasons[$receiptId], $this->receipts);
+        $this->resetErrorBag();
+    }
+
     public function setStatus(int $reportId, string $status): void
     {
         $enum = TripReportStatus::tryFrom($status);
@@ -183,7 +233,14 @@ new #[Layout('layouts.app')] class extends Component {
             return;
         }
 
-        app(TripVerificationService::class)->approveAllPending($this->workSession, $driverId, auth()->user());
+        try {
+            app(TripVerificationService::class)->approveAllPending($this->workSession, $driverId, auth()->user());
+        } catch (\DomainException $e) {
+            $this->addError('action', $e->getMessage());
+
+            return;
+        }
+
         $this->resetErrorBag('action');
 
         unset($this->reportsByDriver, $this->duplicates);
@@ -443,6 +500,8 @@ new #[Layout('layouts.app')] class extends Component {
             $hasDup = $reports->contains(fn ($x) => $x->status !== \App\Enums\TripReportStatus::Void && in_array($x->chassis_last4, $dups, true));
             $dupPending = $reports->contains(fn ($x) => $x->status === \App\Enums\TripReportStatus::Menunggu && in_array($x->chassis_last4, $dups, true));
             $needsAttention = $menunggu > 0 || $tidakCocok > 0 || $hasDup;
+            $cocokCount = $by->get('cocok', 0);
+            $receipt = $this->receipts->get($sd->driver_id);
             $initials = collect(explode(' ', trim($sd->driver->name)))->filter()->map(fn ($w) => mb_substr($w, 0, 1))->take(2)->join('');
         @endphp
 
@@ -499,6 +558,41 @@ new #[Layout('layouts.app')] class extends Component {
                     @endif
                 @endif
             </div>
+
+            @if ($receipt)
+                <div x-data="{ voiding: false }" class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-emerald-100 bg-emerald-50/60 px-4 py-2.5">
+                    <p class="min-w-0 flex-1 text-xs text-emerald-900">
+                        Struk <span class="font-mono font-bold">{{ $receipt->receipt_no }}</span>
+                        &middot; dicetak {{ $receipt->print_count }}x &middot; laporan terkunci
+                    </p>
+                    <a href="{{ route('receipts.print', [$workSession, $receipt]) }}" target="_blank"
+                       class="rounded-lg border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100">
+                        Lihat / cetak ulang
+                    </a>
+                    <button type="button" x-on:click="voiding = !voiding"
+                            class="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50">
+                        Batalkan struk
+                    </button>
+                    <form x-show="voiding" x-cloak wire:submit="voidReceipt({{ $receipt->id }})" class="flex w-full gap-2">
+                        <input type="text" wire:model="voidReasons.{{ $receipt->id }}" maxlength="255" placeholder="Alasan batal (min. 5 huruf)"
+                               class="block w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm">
+                        <button class="shrink-0 rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700">Batalkan</button>
+                    </form>
+                    @error("voidReasons.$receipt->id")
+                        <p class="w-full text-xs text-red-600">{{ $message }}</p>
+                    @enderror
+                </div>
+            @elseif ($menunggu === 0 && $cocokCount > 0)
+                <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 bg-slate-50/60 px-4 py-2.5">
+                    <p class="text-xs text-slate-600">Semua laporan sudah dicek ({{ $cocokCount }} cocok). Siap dibuatkan struk.</p>
+                    <button type="button" wire:click="issueReceipt({{ $sd->driver_id }})"
+                            wire:confirm="Terbitkan struk {{ $sd->driver->name }}? Setelah terbit, laporan supir ini terkunci."
+                            wire:loading.attr="disabled"
+                            class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60">
+                        Terbitkan struk
+                    </button>
+                </div>
+            @endif
 
             <div x-show="open" x-cloak class="border-t border-slate-100">
                 <div class="overflow-x-auto">
