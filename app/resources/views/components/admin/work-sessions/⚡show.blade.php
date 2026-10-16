@@ -29,9 +29,6 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
 
     public int $perPage = 10;
 
-    /** @var array<int, bool> id SessionDriver yang KTP lengkapnya sedang dibuka */
-    public array $revealedKtp = [];
-
     /** Pause auto-refresh saat user lagi search/filter biar gak ganggu input. */
     protected function getPollingInterval(): ?string
     {
@@ -43,18 +40,13 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
     }
 
     /**
-     * Buka/tutup KTP lengkap. Nomor lengkap baru dirender server setelah klik,
-     * dan setiap pembukaan dicatat di activity log (tanpa menyimpan nomornya).
+     * Catat log "Melihat KTP lengkap" saat admin reveal KTP di browser.
+     * KTP sendiri udah dirender di HTML (Alpine toggle) untuk response instan.
+     * Method ini murni audit trail — gak ubah state apapun.
      */
-    public function toggleKtp(int $sessionDriverId): void
+    public function logKtpView(int $sessionDriverId): void
     {
         abort_unless(auth()->user()?->hasRole(RoleName::ADMIN), 403);
-
-        if (isset($this->revealedKtp[$sessionDriverId])) {
-            unset($this->revealedKtp[$sessionDriverId]);
-
-            return;
-        }
 
         $sessionDriver = SessionDriver::query()
             ->with('driver:id,name')
@@ -64,10 +56,11 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
         activity()
             ->causedBy(auth()->user())
             ->performedOn($sessionDriver->driver)
-            ->withProperties(['work_session_id' => $this->workSession->id, 'driver' => $sessionDriver->driver->name])
+            ->withProperties([
+                'work_session_id' => $this->workSession->id,
+                'driver' => $sessionDriver->driver->name,
+            ])
             ->log('Melihat KTP lengkap');
-
-        $this->revealedKtp[$sessionDriverId] = true;
     }
 
     public function mount(WorkSession $workSession): void
@@ -124,12 +117,10 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
 
         return $this->allRoster
             ->filter(function (SessionDriver $sd) use ($needle, $checkIn, $group) {
-                // Filter nama
                 if ($needle !== '' && ! str_contains(mb_strtolower($sd->driver->name), $needle)) {
                     return false;
                 }
 
-                // Filter check-in
                 $checkInOk = match ($checkIn) {
                     'sudah' => $sd->checked_in_at !== null,
                     'belum' => $sd->checked_in_at === null,
@@ -139,7 +130,6 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                     return false;
                 }
 
-                // Filter kelompok
                 if ($group !== 'semua' && (string) $sd->session_group_id !== (string) $group) {
                     return false;
                 }
@@ -220,13 +210,13 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                 <h1 class="flex flex-wrap items-center gap-2 text-2xl font-bold text-slate-900 sm:text-3xl">
                     {{ $workSession->route }}
                     @if ($workSession->isLive())
-<span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #10b981; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 9999px;">
-                        <span style="width: 6px; height: 6px; border-radius: 9999px; background: #10b981; animation: pulse 2s infinite;"></span>
-                        Live
-                    </span>
-@else
-<span style="display: inline-flex; align-items: center; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 3px 8px; border-radius: 9999px;">Selesai</span>
-@endif
+                        <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #10b981; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 9999px;">
+                            <span style="width: 6px; height: 6px; border-radius: 9999px; background: #10b981; animation: pulse 2s infinite;"></span>
+                            Live
+                        </span>
+                    @else
+                        <span style="display: inline-flex; align-items: center; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 3px 8px; border-radius: 9999px;">Selesai</span>
+                    @endif
                 </h1>
                 <p class="mt-1 text-sm text-slate-500">
                     {{ $workSession->date->translatedFormat('d M Y') }}
@@ -278,7 +268,6 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
     {{-- ===== STAT CARDS ===== --}}
     <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;">
 
-        {{-- Terdaftar --}}
         <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
             <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #dbeafe; color: #2563eb;">
                 <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -293,7 +282,6 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             </div>
         </div>
 
-        {{-- Hadir (X/Y = hadir/terdaftar) --}}
         <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
             <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #d1fae5; color: #059669;">
                 <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -308,7 +296,6 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             </div>
         </div>
 
-        {{-- Batas check-in --}}
         <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
             <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #fef3c7; color: #d97706;">
                 <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -323,7 +310,6 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             </div>
         </div>
 
-        {{-- Batas lapor --}}
         <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #fff; border-radius: 10px; padding: 8px 10px; min-width: 0; box-shadow: 0 1px 2px rgba(15,23,42,.04);">
             <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #ede9fe; color: #7c3aed;">
                 <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -431,14 +417,12 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
     {{-- ===== ROSTER ===== --}}
     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-        {{-- Header --}}
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
             <div>
                 <h2 class="text-sm font-semibold text-slate-900">Roster supir</h2>
                 <p class="text-xs text-slate-500">Diurutkan dari yang paling awal mendaftar.</p>
             </div>
 
-            {{-- Search --}}
             <div style="position: relative; min-width: 220px;">
                 <svg style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: #94a3b8; pointer-events: none;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
@@ -448,13 +432,10 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             </div>
         </div>
 
-        {{-- Filter bar: check-in + kelompok (1 baris) --}}
         <div style="padding: 12px 20px; border-bottom: 1px solid #f1f5f9; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; justify-content: space-between;">
 
-            {{-- Kiri: filter check-in (segmented) + dropdown kelompok --}}
             <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px;">
 
-                {{-- Filter check-in --}}
                 <div style="display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: #f1f5f9; border-radius: 12px;">
                     @php
                         $ciFilters = [
@@ -473,7 +454,6 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                     @endforeach
                 </div>
 
-                {{-- Dropdown kelompok (cuma muncul kalau >1 kelompok) --}}
                 @if ($this->groups->count() > 1)
                     <div style="position: relative;">
                         <select wire:model.live="groupFilter"
@@ -490,7 +470,6 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                 @endif
             </div>
 
-            {{-- Kanan: counter --}}
             <span style="font-size: 12px; font-weight: 500; color: #64748b;">
                 Menampilkan <strong style="color: #0f172a;">{{ $shown }}</strong> dari <strong style="color: #0f172a;">{{ $totalFiltered }}</strong> supir
                 @if ($remaining > 0)
@@ -530,26 +509,30 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
                                 </span>
                             </td>
 
-                            <td class="px-4 py-3.5">
-                                <div class="inline-flex items-center gap-2 font-mono text-xs text-slate-500">
-                                    @if (isset($revealedKtp[$roster->id]))
-                                        <span>{{ $roster->driver->ktp }}</span>
-                                    @else
-                                        <span>{{ $roster->driver->maskedKtp() }}</span>
-                                    @endif
-                                    <button type="button" wire:click="toggleKtp({{ $roster->id }})" wire:loading.attr="disabled" wire:target="toggleKtp({{ $roster->id }})"
-                                            @if (isset($revealedKtp[$roster->id])) title="Sembunyikan KTP" aria-label="Sembunyikan KTP" @else title="Lihat KTP lengkap" aria-label="Lihat KTP lengkap" @endif
-                                            class="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 disabled:opacity-50">
-                                        @if (isset($revealedKtp[$roster->id]))
-                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
-                                            </svg>
-                                        @else
-                                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                            </svg>
-                                        @endif
+                            {{-- KTP: Alpine toggle INSTAN + Livewire log di background --}}
+                            <td class="px-4 py-3.5" wire:ignore>
+                                <div x-data="{
+                                        show: false,
+                                        toggle(id) {
+                                            this.show = !this.show;
+                                            if (this.show) $wire.logKtpView(id);
+                                        }
+                                    }"
+                                    class="inline-flex items-center gap-2 font-mono text-xs text-slate-500">
+                                    <span x-show="!show">{{ $roster->driver->maskedKtp() }}</span>
+                                    <span x-show="show" x-cloak>{{ $roster->driver->ktp }}</span>
+                                    <button type="button"
+                                            x-on:click="toggle({{ $roster->id }})"
+                                            x-bind:title="show ? 'Sembunyikan KTP' : 'Lihat KTP lengkap'"
+                                            x-bind:aria-label="show ? 'Sembunyikan KTP' : 'Lihat KTP lengkap'"
+                                            class="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700">
+                                        <svg x-show="!show" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                        </svg>
+                                        <svg x-show="show" x-cloak class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21" />
+                                        </svg>
                                     </button>
                                 </div>
                             </td>
@@ -629,7 +612,6 @@ new #[Layout('layouts.app')] #[Title('Roster sesi')] class extends Component
             </table>
         </div>
 
-        {{-- Load More --}}
         @if ($remaining > 0)
             <div class="border-t border-slate-100 bg-slate-50/50 p-4 text-center">
                 <button type="button" wire:click="loadMore" wire:loading.attr="disabled" wire:target="loadMore"

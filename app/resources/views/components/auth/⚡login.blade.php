@@ -211,7 +211,7 @@ new #[Layout('layouts.blank')] #[Title('Masuk')] class extends Component
 
             <div style="font-size: 12px; color: #94a3b8; text-align: center;">
                 © {{ date('Y') }} JMT — Sistem Absensi Ritase · by
-                <a href="https://awantech.co.id" target="_blank" rel="noopener" style="color: #2563eb; text-decoration: none; font-weight: 600;">
+                <a href="https://www.linkedin.com/in/awandasw" target="_blank" rel="noopener" style="color: #2563eb; text-decoration: none; font-weight: 600;">
                     AwanTech - JMT
                 </a>
             </div>

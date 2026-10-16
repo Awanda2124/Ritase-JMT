@@ -106,7 +106,6 @@ new #[Layout('layouts.app')] class extends Component {
                     default => true,
                 };
             })
-            // ->sortBy(fn (SessionDriver $sd) => mb_strtolower($sd->driver->name))
             ->sortByDesc(fn (SessionDriver $sd) => $this->reportsByDriver[$sd->driver_id]->max('reported_at'))
             ->values();
     }
@@ -306,15 +305,14 @@ new #[Layout('layouts.app')] class extends Component {
             </nav>
             <h1 class="mt-2 flex items-center gap-2 text-2xl font-bold text-slate-900">
                 Cek tiket
-                {{-- Indikator live --}}
                 @if ($workSession->isLive())
-<span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #10b981; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 9999px;">
-                    <span style="width: 6px; height: 6px; border-radius: 9999px; background: #10b981; animation: pulse 2s infinite;"></span>
-                    Live
-                </span>
-@else
-<span style="display: inline-flex; align-items: center; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 3px 8px; border-radius: 9999px;">Selesai</span>
-@endif
+                    <span style="display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #10b981; background: #ecfdf5; border: 1px solid #a7f3d0; padding: 3px 8px; border-radius: 9999px;">
+                        <span style="width: 6px; height: 6px; border-radius: 9999px; background: #10b981; animation: pulse 2s infinite;"></span>
+                        Live
+                    </span>
+                @else
+                    <span style="display: inline-flex; align-items: center; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; background: #f1f5f9; border: 1px solid #e2e8f0; padding: 3px 8px; border-radius: 9999px;">Selesai</span>
+                @endif
                 <style>
                     @keyframes pulse {
                         0%, 100% { opacity: 1; }
@@ -379,8 +377,23 @@ new #[Layout('layouts.app')] class extends Component {
     @endphp
     <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
 
-        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 12px; border-bottom: 1px solid #f1f5f9;">
+        {{-- ===== SUMMARY CARDS (5 kolom) ===== --}}
+        <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 12px; border-bottom: 1px solid #f1f5f9;">
 
+            {{-- Total --}}
+            <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #cbd5e1; background: #f8fafc; border-radius: 10px; padding: 8px 10px; min-width: 0;">
+                <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #e2e8f0; color: #334155;">
+                    <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                </span>
+                <div style="min-width: 0; overflow: hidden;">
+                    <p style="margin: 0; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Total</p>
+                    <p style="margin: 0; font-size: 16px; font-weight: 700; line-height: 1.1; color: #0f172a;">{{ array_sum($this->summary) }}</p>
+                </div>
+            </div>
+
+            {{-- Menunggu --}}
             <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #fcd34d; background: #fffbeb; border-radius: 10px; padding: 8px 10px; min-width: 0;">
                 <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #fef3c7; color: #d97706;">
                     <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -393,6 +406,7 @@ new #[Layout('layouts.app')] class extends Component {
                 </div>
             </div>
 
+            {{-- Cocok --}}
             <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #a7f3d0; background: #ecfdf5; border-radius: 10px; padding: 8px 10px; min-width: 0;">
                 <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #d1fae5; color: #059669;">
                     <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -405,6 +419,7 @@ new #[Layout('layouts.app')] class extends Component {
                 </div>
             </div>
 
+            {{-- Tidak cocok --}}
             <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #fecaca; background: #fef2f2; border-radius: 10px; padding: 8px 10px; min-width: 0;">
                 <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #fee2e2; color: #dc2626;">
                     <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -417,6 +432,7 @@ new #[Layout('layouts.app')] class extends Component {
                 </div>
             </div>
 
+            {{-- Void --}}
             <div style="display: flex; align-items: center; gap: 8px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 10px; padding: 8px 10px; min-width: 0;">
                 <span style="display: flex; width: 28px; height: 28px; flex-shrink: 0; align-items: center; justify-content: center; border-radius: 8px; background: #e2e8f0; color: #475569;">
                     <svg style="width: 14px; height: 14px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -431,6 +447,7 @@ new #[Layout('layouts.app')] class extends Component {
 
         </div>
 
+        {{-- ===== FILTER + SEARCH ===== --}}
         <div style="padding: 16px; display: flex; flex-direction: column; gap: 12px;">
 
             <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center;">

@@ -603,7 +603,7 @@
 
             <footer class="jmt-footer">
                 &copy; {{ date('Y') }} JMT — Sistem Absensi Ritase · by
-                <a href="https://awantech.co.id" target="_blank" rel="noopener">AwanTech - JMT</a>
+                <a href="https://www.linkedin.com/in/awandasw" target="_blank" rel="noopener">AwanTech - JMT</a>
             </footer>
         </main>
 

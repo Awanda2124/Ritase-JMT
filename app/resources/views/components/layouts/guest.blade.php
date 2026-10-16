@@ -92,7 +92,7 @@
 
             {{-- Footer --}}
             <div class="jmt-guest-footer">
-                &copy; {{ date('Y') }} JMT · Sistem Absensi Ritase @by <a href="https://awantech.co.id" target="_blank">AwanTech - JMT</a>
+                &copy; {{ date('Y') }} JMT · Sistem Absensi Ritase @by <a href="https://www.linkedin.com/in/awandasw" target="_blank">AwanTech - JMT</a>
             </div>
 
         </div>
